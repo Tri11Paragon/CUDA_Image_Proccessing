@@ -18,14 +18,14 @@ def process_image(image, width, height):
     #
     # edges = cv2.addWeighted(x, 0.5, y, 0.5, 0)
 
-    # ret, thresh = cv2.threshold(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    ret, thresh = cv2.threshold(grey, 150, 255, cv2.THRESH_BINARY)
 
-    # image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    # edges = cv2.Canny(image, 50, 100)
+    edges = cv2.Canny(grey, 50, 100)
 
     # combined = cv2.addWeighted(edges, 0.5, thresh, 0.5, 0)
 
-    cv2.imshow("edges", image)
+    cv2.imshow("edges", thresh)
 
 def open_camera(save_path, frame_call):
     cam = cv2.VideoCapture(0)
