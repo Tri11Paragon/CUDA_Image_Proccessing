@@ -4,7 +4,6 @@ import argparse
 import numpy as np
 import datetime
 
-
 def threshold_image(image):
     size = 15
     kernel = np.ones((size, size), np.float32) / (size * size)
@@ -46,8 +45,8 @@ def find_bounds_and_contours(grey_image, limit=10, min_dist_to_edge=10):
                 (x[0][1] + x[0][3] > (h - min_dist_to_edge)))]
 
 reference_thresholds = {
-    "T-Shape": cv2.cvtColor(threshold_image(cv2.imread("res/reference_t.png")), cv2.COLOR_BGR2GRAY),
-    "Z-Shape": cv2.cvtColor(threshold_image(cv2.imread("res/reference_z.png")), cv2.COLOR_BGR2GRAY)
+    "T-Shape": cv2.cvtColor(threshold_image(cv2.imread("res/grey_t/2025-02-03 19:29:49.845166.png")), cv2.COLOR_BGR2GRAY),
+    "Z-Shape": cv2.cvtColor(threshold_image(cv2.imread("res/green_z/2025-02-03 19:32:15.596875.png")), cv2.COLOR_BGR2GRAY),
 }
 
 reference_shapes = {
