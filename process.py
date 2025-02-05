@@ -4,14 +4,17 @@ import argparse
 import numpy as np
 import datetime
 
+global reference_thresholds
+global reference_shapes
+
 def threshold_image(image):
     size = 15
     kernel = np.ones((size, size), np.float32) / (size * size)
 
     inverted = cv2.bitwise_not(image)
 
-    blured = cv2.filter2D(inverted, -1, kernel)
-    blured = cv2.GaussianBlur(blured, (size, size), 0)
+    # blured = cv2.filter2D(inverted, -1, kernel)
+    blured = cv2.GaussianBlur(inverted, (size, size), 0)
 
     lower_bound = np.array([150, 0, 0])  # Lower BGR threshold
     upper_bound = np.array([255, 255, 255])  # Upper BGR threshold
@@ -44,17 +47,6 @@ def find_bounds_and_contours(grey_image, limit=10, min_dist_to_edge=10):
                 (x[0][0] + x[0][2] > (w - min_dist_to_edge)) or
                 (x[0][1] + x[0][3] > (h - min_dist_to_edge)))]
 
-reference_thresholds = {
-    "T-Shape": cv2.cvtColor(threshold_image(cv2.imread("res/grey_t/2025-02-03 19:29:49.845166.png")), cv2.COLOR_BGR2GRAY),
-    "Z-Shape": cv2.cvtColor(threshold_image(cv2.imread("res/green_z/2025-02-03 19:32:15.596875.png")), cv2.COLOR_BGR2GRAY),
-}
-
-reference_shapes = {
-    "T-Shape": (find_bounds_and_contours(reference_thresholds["T-Shape"])[0][1]),
-    "Z-Shape": (find_bounds_and_contours(reference_thresholds["Z-Shape"])[0][1])
-}
-
-
 def process_image(image, width, height):
     grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     thresh = threshold_image(image)
@@ -79,10 +71,6 @@ def process_image(image, width, height):
                 if score < min_diff:
                     min_diff = score
                     best_shape = shape_name
-                # distance = np.linalg.norm(hu_moments - ref_hu)
-                # if distance < min_diff:
-                #     min_diff = distance
-                #     best_shape = shape_name
 
         area = cv2.contourArea(c)
         hull = cv2.convexHull(c)
@@ -139,6 +127,41 @@ def main():
     parser.add_argument('-s', action='store', help="Path to save images in")
 
     args = parser.parse_args()
+
+    global reference_thresholds
+    global reference_shapes
+    reference_thresholds = {
+        "T-Shape-Green": cv2.cvtColor(threshold_image(cv2.imread("res/green_t/2025-02-05 13:54:52.266144.png")),
+                                      cv2.COLOR_BGR2GRAY),
+        "Z-Shape-Green": cv2.cvtColor(threshold_image(cv2.imread("res/green_z/2025-02-03 19:32:15.596875.png")),
+                                      cv2.COLOR_BGR2GRAY),
+        "L-Shape-Green": cv2.cvtColor(threshold_image(cv2.imread("res/green_l/2025-02-03 19:33:51.765660.png")),
+                                      cv2.COLOR_BGR2GRAY),
+        "T-Shape-Grey": cv2.cvtColor(threshold_image(cv2.imread("res/grey_t/2025-02-03 19:29:32.805979.png")),
+                                     cv2.COLOR_BGR2GRAY),
+        "Z-Shape-Grey": cv2.cvtColor(threshold_image(cv2.imread("res/grey_z/2025-02-03 19:24:16.587044.png")),
+                                     cv2.COLOR_BGR2GRAY),
+        "L-Shape-Grey": cv2.cvtColor(threshold_image(cv2.imread("res/grey_l/2025-02-03 19:27:52.109698.png")),
+                                     cv2.COLOR_BGR2GRAY),
+        "T-Shape-Orange": cv2.cvtColor(threshold_image(cv2.imread("res/orange_t/2025-02-03 19:38:09.115254.png")),
+                                       cv2.COLOR_BGR2GRAY),
+        "Z-Shape-Orange": cv2.cvtColor(threshold_image(cv2.imread("res/orange_z/2025-02-03 19:22:16.808573.png")),
+                                       cv2.COLOR_BGR2GRAY),
+        "L-Shape-Orange": cv2.cvtColor(threshold_image(cv2.imread("res/orange_l/2025-02-03 19:36:11.811343.png")),
+                                       cv2.COLOR_BGR2GRAY)
+    }
+
+    reference_shapes = {
+        "T-Shape-Green": (find_bounds_and_contours(reference_thresholds["T-Shape-Green"])[0][1]),
+        "Z-Shape-Green": (find_bounds_and_contours(reference_thresholds["Z-Shape-Green"])[0][1]),
+        "L-Shape-Green": (find_bounds_and_contours(reference_thresholds["L-Shape-Green"])[0][1]),
+        "T-Shape-Grey": (find_bounds_and_contours(reference_thresholds["T-Shape-Grey"])[0][1]),
+        "Z-Shape-Grey": (find_bounds_and_contours(reference_thresholds["Z-Shape-Grey"])[0][1]),
+        "L-Shape-Grey": (find_bounds_and_contours(reference_thresholds["L-Shape-Grey"])[0][1]),
+        "T-Shape-Orange": (find_bounds_and_contours(reference_thresholds["T-Shape-Orange"])[0][1]),
+        "Z-Shape-Orange": (find_bounds_and_contours(reference_thresholds["Z-Shape-Orange"])[0][1]),
+        "L-Shape-Orange": (find_bounds_and_contours(reference_thresholds["L-Shape-Orange"])[0][1])
+    }
 
     if not args.i and not args.w:
         print("Please select a mode of operation!")
