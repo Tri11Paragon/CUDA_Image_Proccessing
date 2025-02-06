@@ -69,6 +69,14 @@ def find_bounds_and_contours(grey_image, limit=10, min_dist_to_edge=10):
                 (x[0][1] + x[0][3] > (h - min_dist_to_edge)))]
 
 
+def extract_color(image, contour):
+    mask = np.zeros(image.shape[:2], dtype=np.uint8)
+
+    cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)
+    mean_color = cv2.mean(image, mask=mask)
+    return mean_color[:3]
+
+
 def draw_bounds(image, limit=10, min_dist_to_edge=10):
     local = image.copy()
     contours = find_bounds_and_contours(cv2.cvtColor(local, cv2.COLOR_BGR2GRAY), limit, min_dist_to_edge)

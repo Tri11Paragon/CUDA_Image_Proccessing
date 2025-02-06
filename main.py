@@ -9,8 +9,23 @@ import basic_classify as c
 from pathlib import Path
 import pickle
 
+def handle_test(bool1, bool2, name, correct_shape_color, correct_shape, correct_color, incorrect):
+    if bool1:
+        if bool2:
+            correct_shape_color.append(name)
+        else:
+            correct_shape.append(name)
+    else:
+        if bool2:
+            correct_color.append(name)
+        else:
+            incorrect.append(name)
+
+
 def run_test(folder):
-    correct = []
+    correct_shape_color = []
+    correct_shape = []
+    correct_color = []
     incorrect = []
     too_many = []
     no_classification = []
@@ -19,7 +34,7 @@ def run_test(folder):
             continue
         print(f"Processing {folder}/{file.name}")
 
-        image = cv2.imread(file.resolve())
+        image = cv2.imread(str(file.resolve()))
 
         data = c.classify(image)
 
@@ -29,24 +44,23 @@ def run_test(folder):
             too_many.append(file.name)
         else:
             shape, bound, con, corners = data[0]
-            if folder.endswith('l'):
-                if shape.startswith('L'):
-                    correct.append(file.name)
-                else:
-                    incorrect.append(file.name)
-            elif folder.endswith('t'):
-                if shape.startswith('T'):
-                    correct.append(file.name)
-                else:
-                    incorrect.append(file.name)
-            elif folder.endswith('z'):
-                if shape.startswith('Z'):
-                    correct.append(file.name)
-                else:
-                    incorrect.append(file.name)
+
+            color = process.extract_color(image, con)
+            p_color = c.classify_color(color)
+
+            name_split = folder.split('_')
+            c_color = name_split[0].split('/')[-1]
+            c_shape = name_split[1]
+
+            if c_shape == 'l':
+                handle_test(shape.startswith('L'), p_color == c_color, file.name, correct_shape_color, correct_shape, correct_color, incorrect)
+            elif c_shape == 't':
+                handle_test(shape.startswith('T'), p_color == c_color, file.name, correct_shape_color, correct_shape, correct_color, incorrect)
+            elif c_shape == 'z':
+                handle_test(shape.startswith('Z'), p_color == c_color, file.name, correct_shape_color, correct_shape, correct_color, incorrect)
             else:
                 print(f"unable to classify object path? {folder}")
-    return folder, correct, incorrect, too_many, no_classification
+    return folder, correct_shape_color, correct_shape, correct_color, incorrect, too_many, no_classification
 
 def run_tests():
     results = []
@@ -70,11 +84,22 @@ def run_tests():
     total_correct = 0
     total_incorrect = 0
 
-    for folder, correct, incorrect, too_many, no_classification in results:
-        total_correct += len(correct)
-        total_incorrect += len(incorrect)
+    for folder, correct_shape_color, correct_shape, correct_color, incorrect, too_many, no_classification in results:
+        for path in correct_color:
+            print(f"Color: {folder}/{path}")
+        for path in correct_shape:
+                print(f"Shape: {folder}/{path}")
+
+    for folder, correct_shape_color, correct_shape, correct_color, incorrect, too_many, no_classification in results:
+        total_correct += len(correct_shape_color)
+        total_partially_correct = len(correct_shape) + len(correct_color)
+        total_incorrect += len(incorrect) + total_partially_correct
+
         print(f"For folder {folder}:")
-        print(f"\tCorrect: {len(correct)}")
+        print(f"\tCorrect Color & Shape: {len(correct_shape_color)}")
+        print(f"\tCorrect Color: {len(correct_color)}")
+        print(f"\tCorrect Shape: {len(correct_shape)}")
+        print()
         print(f"\tIncorrect: {len(incorrect)}")
         print(f"\tToo many: {len(too_many)}")
         print(f"\tNo classification: {len(no_classification)}")

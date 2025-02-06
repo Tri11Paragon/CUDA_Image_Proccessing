@@ -61,6 +61,13 @@ def classify(image):
 
     return data
 
+def classify_color(color):
+    if color[2] > 150:
+        return "orange"
+    elif color[0] > 70 and color[1] > 70:
+        return "grey"
+    return "green"
+
 def draw_classification(image):
     draw = image.copy()
     data = classify(image)
@@ -73,9 +80,17 @@ def draw_classification(image):
         cv2.drawContours(draw, [c], -1, (255, 0, 0), 2)
         cv2.drawContours(draw, [hull], -1, (0, 0, 255), 2)
 
+        average_color = process.extract_color(image, c)
+        p_color = classify_color(average_color)
+
         cv2.rectangle(draw, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        cv2.putText(draw, "Corners: " + str(corners), (x - 2, y - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255),
+        cv2.putText(draw, "Corners: " + str(corners), (x - 2, y - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255),
                     1, cv2.LINE_AA)
-        cv2.putText(draw, shape, (x - 2, y + h + 16), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(draw, str(round(average_color[0], 2)) + " " + str(round(average_color[1], 2)), (x - 2, y - 24), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255),
+                    1, cv2.LINE_AA)
+        cv2.putText(draw, str(round(average_color[2], 2)), (x - 2, y - 8), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5, (0, 0, 255),
+                    1, cv2.LINE_AA)
+        cv2.putText(draw, shape + " " + p_color, (x - 2, y + h + 16), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
 
     cv2.imshow("Classification", draw)
