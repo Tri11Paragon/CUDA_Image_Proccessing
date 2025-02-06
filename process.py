@@ -3,26 +3,47 @@ import cv2
 import argparse
 import numpy as np
 import datetime
+import camera
 
-global reference_thresholds
-global reference_shapes
+
+def modify_hsv(image, func):
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(hsv)
+    h, s, v = func(h, s, v)
+    hsv_enhanced = cv2.merge([np.clip(h, 0, 255).astype(np.uint8),
+                              np.clip(s, 0, 255).astype(np.uint8),
+                              np.clip(v, 0, 255).astype(np.uint8)])
+
+    return cv2.cvtColor(hsv_enhanced, cv2.COLOR_HSV2BGR)
+
+
+def sharpen(image, intensity=5):
+    sharpening_kernel = np.array([
+        [0, -1, 0],
+        [-1, intensity, -1],
+        [0, -1, 0]
+    ])
+
+    return cv2.filter2D(image, -1, sharpening_kernel)
+
 
 def threshold_image(image):
-    size = 15
-    kernel = np.ones((size, size), np.float32) / (size * size)
+    size = 5
+    kernel = np.ones((size, size), np.uint8)
 
-    inverted = cv2.bitwise_not(image)
+    saturated = image.copy()
+    saturated = modify_hsv(saturated, lambda h, s, v: (h, s, v * 1.9))
+    saturated = modify_hsv(saturated, lambda h, s, v: (h, s, v / 1.9))
+    saturated = modify_hsv(saturated, lambda h, s, v: ((h + 30) % 180, s, v))
+    saturated = modify_hsv(saturated, lambda h, s, v: ((h + 90) % 180, s * 0.5, v * 2.5))
 
-    # blured = cv2.filter2D(inverted, -1, kernel)
-    blured = cv2.GaussianBlur(inverted, (size, size), 0)
+    gray = cv2.cvtColor(saturated, cv2.COLOR_BGR2GRAY)
 
-    lower_bound = np.array([150, 0, 0])  # Lower BGR threshold
-    upper_bound = np.array([255, 255, 255])  # Upper BGR threshold
+    edges = cv2.Canny(gray, 50, 100)
+    edges = cv2.dilate(edges, kernel)
+    colored = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
 
-    mask = cv2.inRange(blured, lower_bound, upper_bound)
-    result = cv2.bitwise_and(blured, blured, mask=mask)
-
-    return result
+    return colored
 
 
 def get_hu_moments(contour):
@@ -47,139 +68,51 @@ def find_bounds_and_contours(grey_image, limit=10, min_dist_to_edge=10):
                 (x[0][0] + x[0][2] > (w - min_dist_to_edge)) or
                 (x[0][1] + x[0][3] > (h - min_dist_to_edge)))]
 
-def process_image(image, width, height):
-    grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    thresh = threshold_image(image)
-    thresh_grey = cv2.cvtColor(thresh, cv2.COLOR_BGR2GRAY)
-    bounds = find_bounds_and_contours(thresh_grey)
 
-    for bound, c in bounds:
+def draw_bounds(image, limit=10, min_dist_to_edge=10):
+    local = image.copy()
+    contours = find_bounds_and_contours(cv2.cvtColor(local, cv2.COLOR_BGR2GRAY), limit, min_dist_to_edge)
+
+    for bound, c in contours:
         x, y, w, h = bound
+        cv2.rectangle(local, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-        epsilon = 0.02 * cv2.arcLength(c, True)
-        approx = cv2.approxPolyDP(c, epsilon, True)
-        num_corners = len(approx)
-
-        best_shape = "Unknown"
-        if num_corners == 6:
-            best_shape = "L-Shape"
-        else:
-            min_diff = float("inf")
-            # hu_moments = get_hu_moments(c)
-            for shape_name, ref in reference_shapes.items():
-                score = cv2.matchShapes(c, ref, cv2.CONTOURS_MATCH_I1, 0)
-                if score < min_diff:
-                    min_diff = score
-                    best_shape = shape_name
-
-        area = cv2.contourArea(c)
-        hull = cv2.convexHull(c)
-        hull_area = cv2.contourArea(hull)
-
-        solidity = float(area) / hull_area if hull_area > 0 else 0
-
-        cv2.drawContours(thresh, [c], -1, (255, 0, 0), 2)
-        cv2.drawContours(thresh, [hull], -1, (0, 0, 255), 2)
-
-        cv2.rectangle(thresh, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        cv2.putText(thresh, "Corners: " + str(num_corners), (x - 2, y - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255),
-                    1, cv2.LINE_AA)
-        cv2.putText(thresh, best_shape, (x - 2, y + h + 16), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
-
-    # combined = cv2.addWeighted(edges, 0.5, thresh, 0.5, 0)
-
-    cv2.imshow("edges", thresh)
+    return local
 
 
-def open_camera(save_path, frame_call):
-    cam = cv2.VideoCapture(0)
-    frame_width = int(cam.get(cv2.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cam.get(cv2.CAP_PROP_FRAME_HEIGHT))
+def draw_contours(image, limit=10, min_dist_to_edge=10):
+    mask = np.zeros_like(image)
+    contours = find_bounds_and_contours(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), limit, min_dist_to_edge)
 
-    while True:
-        try:
-            ret, frame = cam.read()
+    for bound, c in contours:
+        cv2.drawContours(mask, [c], -1, (255, 255, 255), 2)
 
-            frame_call(frame, frame_width, frame_height)
-
-            key = cv2.waitKey(1)
-            if key == ord('q'):
-                break
-            if save_path and key == ord('s'):
-                now = datetime.datetime.now()
-                if not save_path.endswith('/'):
-                    save_path += '/'
-                if not os.path.exists(save_path):
-                    os.makedirs(save_path)
-                cv2.imwrite(save_path + '/' + str(now) + '.png', frame)
-        except KeyboardInterrupt:
-            break
-    cam.release()
-    cv2.destroyAllWindows()
+    return mask
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-w', action='store_true', default=False, help="Use webcam as input instead of images")
-    parser.add_argument('-a', action='store_true', default=False,
-                        help="Use an average of the input on the webcam instead of the current image frame")
-    parser.add_argument('-i', action='store', help="Image path to use if you are not using a webcam")
-    parser.add_argument('-s', action='store', help="Path to save images in")
+    parser = argparse.ArgumentParser(description='Capture video and display threshold values')
+
+    parser.add_argument('-i', action='store', help='image path to use')
+    parser.add_argument('-w', action='store', nargs='?', help='use webcam flag', default=None, const=0, type=int)
 
     args = parser.parse_args()
 
-    global reference_thresholds
-    global reference_shapes
-    reference_thresholds = {
-        "T-Shape-Green": cv2.cvtColor(threshold_image(cv2.imread("res/green_t/2025-02-05 13:54:52.266144.png")),
-                                      cv2.COLOR_BGR2GRAY),
-        "Z-Shape-Green": cv2.cvtColor(threshold_image(cv2.imread("res/green_z/2025-02-03 19:32:15.596875.png")),
-                                      cv2.COLOR_BGR2GRAY),
-        "L-Shape-Green": cv2.cvtColor(threshold_image(cv2.imread("res/green_l/2025-02-03 19:33:51.765660.png")),
-                                      cv2.COLOR_BGR2GRAY),
-        "T-Shape-Grey": cv2.cvtColor(threshold_image(cv2.imread("res/grey_t/2025-02-03 19:29:32.805979.png")),
-                                     cv2.COLOR_BGR2GRAY),
-        "Z-Shape-Grey": cv2.cvtColor(threshold_image(cv2.imread("res/grey_z/2025-02-03 19:24:16.587044.png")),
-                                     cv2.COLOR_BGR2GRAY),
-        "L-Shape-Grey": cv2.cvtColor(threshold_image(cv2.imread("res/grey_l/2025-02-03 19:27:52.109698.png")),
-                                     cv2.COLOR_BGR2GRAY),
-        "T-Shape-Orange": cv2.cvtColor(threshold_image(cv2.imread("res/orange_t/2025-02-03 19:38:09.115254.png")),
-                                       cv2.COLOR_BGR2GRAY),
-        "Z-Shape-Orange": cv2.cvtColor(threshold_image(cv2.imread("res/orange_z/2025-02-03 19:22:16.808573.png")),
-                                       cv2.COLOR_BGR2GRAY),
-        "L-Shape-Orange": cv2.cvtColor(threshold_image(cv2.imread("res/orange_l/2025-02-03 19:36:11.811343.png")),
-                                       cv2.COLOR_BGR2GRAY)
-    }
-
-    reference_shapes = {
-        "T-Shape-Green": (find_bounds_and_contours(reference_thresholds["T-Shape-Green"])[0][1]),
-        "Z-Shape-Green": (find_bounds_and_contours(reference_thresholds["Z-Shape-Green"])[0][1]),
-        "L-Shape-Green": (find_bounds_and_contours(reference_thresholds["L-Shape-Green"])[0][1]),
-        "T-Shape-Grey": (find_bounds_and_contours(reference_thresholds["T-Shape-Grey"])[0][1]),
-        "Z-Shape-Grey": (find_bounds_and_contours(reference_thresholds["Z-Shape-Grey"])[0][1]),
-        "L-Shape-Grey": (find_bounds_and_contours(reference_thresholds["L-Shape-Grey"])[0][1]),
-        "T-Shape-Orange": (find_bounds_and_contours(reference_thresholds["T-Shape-Orange"])[0][1]),
-        "Z-Shape-Orange": (find_bounds_and_contours(reference_thresholds["Z-Shape-Orange"])[0][1]),
-        "L-Shape-Orange": (find_bounds_and_contours(reference_thresholds["L-Shape-Orange"])[0][1])
-    }
-
-    if not args.i and not args.w:
-        print("Please select a mode of operation!")
-        print("--help to see a list of available commands")
-        print("\t-w\t\tUse your webcam as input")
-        print("\t-i\t\tUse a static image as input")
-
-    if args.i:
+    if args.w:
+        camera.open_camera("unused",
+                           lambda image, w, h: cv2.imshow("Camera View", cv2.hconcat([threshold_image(image), image])))
+    elif args.i:
         img = cv2.imread(args.i)
-        width, height, channels = img.shape
         while True:
-            process_image(img, width, height)
+            thresh = threshold_image(img)
+            p1 = cv2.vconcat([thresh, draw_bounds(thresh)])
+            p2 = cv2.vconcat([img, draw_contours(thresh)])
+            cv2.imshow("Image View", cv2.hconcat([p1, p2]))
 
             if cv2.waitKey(1) == ord('q'):
                 break
-
-    if args.w:
-        open_camera(args.s, process_image)
+    else:
+        print("Please provide either -i or -w flags")
 
 
 if __name__ == '__main__':
