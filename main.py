@@ -86,9 +86,9 @@ def run_tests():
 
     for folder, correct_shape_color, correct_shape, correct_color, incorrect, too_many, no_classification in results:
         for path in correct_color:
-            print(f"Color: {folder}/{path}")
+            print(f"Shape: {folder}/{path}")
         for path in correct_shape:
-                print(f"Shape: {folder}/{path}")
+            print(f"Color: {folder}/{path}")
 
     for folder, correct_shape_color, correct_shape, correct_color, incorrect, too_many, no_classification in results:
         total_correct += len(correct_shape_color)

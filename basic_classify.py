@@ -3,23 +3,29 @@ import cv2
 import numpy as np
 
 reference_thresholds = {
-    "T-Shape-Green": cv2.cvtColor(process.threshold_image(cv2.imread("res/green_t/2025-02-05 13:54:52.266144.png")),
+    "T-Shape-Green": cv2.cvtColor(process.threshold_image(cv2.imread(
+        "res/base/green_t/2025-02-05 13:54:52.266144.png")),
                                   cv2.COLOR_BGR2GRAY),
-    "Z-Shape-Green": cv2.cvtColor(process.threshold_image(cv2.imread("res/green_z/2025-02-03 19:32:15.596875.png")),
+    "Z-Shape-Green": cv2.cvtColor(process.threshold_image(cv2.imread(
+        "res/base/green_z/2025-02-03 19:32:15.596875.png")),
                                   cv2.COLOR_BGR2GRAY),
-    "L-Shape-Green": cv2.cvtColor(process.threshold_image(cv2.imread("res/green_l/2025-02-03 19:33:51.765660.png")),
+    "L-Shape-Green": cv2.cvtColor(process.threshold_image(cv2.imread(
+        "res/base/green_l/2025-02-03 19:33:51.765660.png")),
                                   cv2.COLOR_BGR2GRAY),
-    "T-Shape-Grey": cv2.cvtColor(process.threshold_image(cv2.imread("res/grey_t/2025-02-03 19:29:32.805979.png")),
+    "T-Shape-Grey": cv2.cvtColor(process.threshold_image(cv2.imread("res/base/grey_t/2025-02-03 19:29:32.805979.png")),
                                  cv2.COLOR_BGR2GRAY),
-    "Z-Shape-Grey": cv2.cvtColor(process.threshold_image(cv2.imread("res/grey_z/2025-02-03 19:24:16.587044.png")),
+    "Z-Shape-Grey": cv2.cvtColor(process.threshold_image(cv2.imread("res/base/grey_z/2025-02-03 19:24:16.587044.png")),
                                  cv2.COLOR_BGR2GRAY),
-    "L-Shape-Grey": cv2.cvtColor(process.threshold_image(cv2.imread("res/grey_l/2025-02-03 19:27:52.109698.png")),
+    "L-Shape-Grey": cv2.cvtColor(process.threshold_image(cv2.imread("res/base/grey_l/2025-02-03 19:27:52.109698.png")),
                                  cv2.COLOR_BGR2GRAY),
-    "T-Shape-Orange": cv2.cvtColor(process.threshold_image(cv2.imread("res/orange_t/2025-02-03 19:38:09.115254.png")),
+    "T-Shape-Orange": cv2.cvtColor(process.threshold_image(cv2.imread(
+        "res/base/orange_t/2025-02-03 19:38:09.115254.png")),
                                    cv2.COLOR_BGR2GRAY),
-    "Z-Shape-Orange": cv2.cvtColor(process.threshold_image(cv2.imread("res/orange_z/2025-02-03 19:22:16.808573.png")),
+    "Z-Shape-Orange": cv2.cvtColor(process.threshold_image(cv2.imread(
+        "res/base/orange_z/2025-02-03 19:22:16.808573.png")),
                                    cv2.COLOR_BGR2GRAY),
-    "L-Shape-Orange": cv2.cvtColor(process.threshold_image(cv2.imread("res/orange_l/2025-02-03 19:36:11.811343.png")),
+    "L-Shape-Orange": cv2.cvtColor(process.threshold_image(cv2.imread(
+        "res/base/orange_l/2025-02-03 19:36:11.811343.png")),
                                    cv2.COLOR_BGR2GRAY)
 }
 
@@ -64,7 +70,7 @@ def classify(image):
 def classify_color(color):
     if color[2] > 150:
         return "orange"
-    elif color[0] > 70 and color[1] > 70:
+    elif color[0] > 70 and color[1] > 70 and color[2] >= 60:
         return "grey"
     return "green"
 
