@@ -12,17 +12,17 @@ pkgs.mkShell
 		jetbrains.pycharm-professional
 	];
 
-	propagatedBuildInputs = with pkgs; [
-		
+	propagatedBuildInputs = with customPkgs; [
+		customPkgs.rocmPackages_5.hipblaslt		
 	];
 
 	packages = [
-	    (pkgs.python3.withPackages (pip: [
+	    (customPkgs.python3.withPackages (pip: [
 	    	pip.pandas
 	    	pip.requests
 			pip.numpy
 			(pip.opencv4.override { enableGtk2 = true; })
-			pip.torch
+#			pip.torchWithRocm
 	    ]))
   	];
 	LD_LIBRARY_PATH="/run/opengl-driver/lib:/run/opengl-driver-32/lib";

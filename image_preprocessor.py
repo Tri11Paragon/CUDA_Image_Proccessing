@@ -10,6 +10,7 @@ from pathlib import Path
 import pickle
 import sqlite3
 import random
+import shutil
 
 
 def generate_flipped(img):
@@ -19,20 +20,20 @@ def generate_flipped(img):
     return img_h, img_v, img_hv
 
 
-def add_gaussian_noise(image, mean=0, std=25):
+def add_gaussian_noise(image, factor = 0.5, mean=0, std=25):
     noise = np.random.normal(mean, std, image.shape).astype(np.uint8)
-    noisy_image = cv2.add(image, noise)
+    noisy_image = cv2.addWeighted(image, 1 - factor, noise, factor, 0)
     return noisy_image
 
 
-def adjust_brightness(image, value=30):
+def adjust_brightness(image, value=0.5):
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     h, s, v = cv2.split(hsv)
 
-    v = np.clip(v + value, 0, 255)
-    hsv = cv2.merge((h, s, v))
+    v = np.clip(v * value, 0, 255).astype(np.uint8)
+    hsv_c = cv2.merge([np.clip(h, 0, 255).astype(np.uint8), np.clip(s, 0, 255).astype(np.uint8), v])
 
-    return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+    return cv2.cvtColor(hsv_c, cv2.COLOR_HSV2BGR)
 
 
 def rotate_image(image, angle):
@@ -62,9 +63,11 @@ def add_salt_and_pepper_noise(image, salt_prob=0.02, pepper_prob=0.02):
     return noisy
 
 
-def add_poisson_noise(image):
-    noisy = np.random.poisson(image.astype(np.float32))
-    noisy = np.clip(noisy, 0, 255).astype(np.uint8)
+def add_poisson_noise(image, factor = 1):
+    noisy = image
+    for i in range(0, int(factor)):
+        noisy = np.random.poisson(noisy.astype(np.float32))
+        noisy = np.clip(noisy, 0, 255).astype(np.uint8)
     return noisy
 
 
@@ -97,7 +100,6 @@ def image_to_database(image, path, original, cursor):
 
 
 def run_generate(args):
-    Path(args.output_folder).mkdir(parents=True, exist_ok=True)
     cwd = Path.cwd()
 
     if args.d:
@@ -190,6 +192,111 @@ def run_generate(args):
     if args.d:
         connection.close()
 
+def extra_image_to_database(path, original_id, cursor):
+    cursor.execute("""
+                    INSERT INTO extra_images (image_id, filename)
+                    VALUES (?, ?)
+                """, (original_id, path))
+
+def get_all_images(cursor):
+    cursor.execute("SELECT * FROM images")
+    return cursor.fetchall()
+
+def update_image_filename_with_path(cursor, image_id):
+    cursor.execute("SELECT filename FROM images WHERE id = ?", (image_id,))
+    result = cursor.fetchone()
+
+    if result is None:
+        print(f"No image found with ID {image_id}")
+        return
+
+    old_filename = result[0]
+    old_path = Path(old_filename)
+
+    new_filename = str(old_path.parent / "images" / old_path.name)
+
+    cursor.execute("""
+        UPDATE images
+        SET filename = ?
+        WHERE id = ?
+    """, (new_filename, image_id))
+
+    print(f"Updated image ID {image_id}: {old_filename} -> {new_filename}")
+
+def deep_generate(args):
+    output_path = Path(args.output_folder)
+    image_path = output_path.joinpath("images")
+    gaussian = image_path.joinpath("gaussian_noise")
+    gaussian.mkdir(parents=True, exist_ok=True)
+    salt_pepper = image_path.joinpath("salt_pepper_noise")
+    salt_pepper.mkdir(parents=True, exist_ok=True)
+    poisson = image_path.joinpath("poisson_noise")
+    poisson.mkdir(parents=True, exist_ok=True)
+    brightness = image_path.joinpath("brightness")
+    brightness.mkdir(parents=True, exist_ok=True)
+    database_path = output_path.joinpath("image_data.db")
+    if not database_path.exists():
+        shutil.copy(args.database, str(database_path.resolve()))
+
+    connection = sqlite3.connect(database_path)
+    cursor = connection.cursor()
+
+    cursor.execute("""
+                CREATE TABLE IF NOT EXISTS extra_images (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    image_id INTEGER,
+                    filename TEXT,
+                    FOREIGN KEY(image_id) REFERENCES images(id)
+                )
+            """)
+
+    for image in get_all_images(cursor):
+        image_id, filename, original_file = image
+        print(f"ID: {image_id}, Filename: {filename}, Original File: {original_file}")
+
+        image = cv2.imread(str(filename))
+
+        value_min = 0.2
+        value_max = 0.9
+        value_step = (value_max - value_min) / (args.n - 1)
+
+        noise_min = 0.05
+        noise_max = 0.6
+        noise_step = (noise_max - noise_min) / (args.n - 1)
+
+        sp_min = 0.02
+        sp_max = 0.06
+        sp_step = (sp_max - sp_min) / (args.n - 1)
+
+        poisson_noise_image = add_poisson_noise(image, 1)
+        path = str(poisson / (Path(filename).stem + "_poisson" + str(1) + Path(filename).suffix))
+        cv2.imwrite(str(path), poisson_noise_image)
+        extra_image_to_database(path, image_id, cursor)
+
+        for i in range(0, args.n):
+            sp_value = sp_min + sp_step * i
+            salt_pepper_noise_image = add_salt_and_pepper_noise(image, sp_value, sp_value)
+            path = str(salt_pepper / (Path(filename).stem + "_sp" + str(round(sp_value, 5)) + Path(filename).suffix))
+            cv2.imwrite(str(path), salt_pepper_noise_image)
+            extra_image_to_database(path, image_id, cursor)
+
+        for i in range(0, args.n):
+            noise_value = noise_min + noise_step * i
+            gaussian_noise_image = add_gaussian_noise(image, noise_value)
+            path = str(gaussian / (Path(filename).stem + "_noise" + str(round(noise_value, 5)) + Path(filename).suffix))
+            cv2.imwrite(str(path), gaussian_noise_image)
+            extra_image_to_database(path, image_id, cursor)
+
+        for i in range(0, args.n):
+            brightness_value = value_min + value_step * i
+            brightness_image = adjust_brightness(image, brightness_value)
+            path = str(brightness / (Path(filename).stem + "_bright" + str(round(brightness_value, 5)) + Path(filename).suffix))
+            cv2.imwrite(path, brightness_image)
+            extra_image_to_database(path, image_id, cursor)
+
+    
+    connection.commit()
+    connection.close()
 
 def main():
     parser = argparse.ArgumentParser(description="Preprocess images for use in the neural network")
@@ -219,12 +326,16 @@ def main():
     deep_parser.add_argument("-n", default=10, type=int, help="Number of images to generate")
     deep_parser.add_argument("res_folder", help="Folder to take images from")
     deep_parser.add_argument("output_folder", help="Folder to put the generated images into")
+    deep_parser.add_argument("database", help="Database with image information in it (this will be copied)")
 
     args = parser.parse_args()
 
+    Path(args.output_folder).mkdir(parents=True, exist_ok=True)
+
     if args.mode == "generate":
         run_generate(args)
-
+    if args.mode == "deep_generate":
+        deep_generate(args)
 
 if __name__ == "__main__":
     main()
