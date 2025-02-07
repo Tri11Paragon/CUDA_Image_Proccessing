@@ -96,7 +96,6 @@ def image_to_database(image, path, original, cursor):
             """, (image_id, x, y, w, h))
 
 
-
 def run_generate(args):
     Path(args.output_folder).mkdir(parents=True, exist_ok=True)
     cwd = Path.cwd()
@@ -142,6 +141,12 @@ def run_generate(args):
         if file.is_dir():
             files.extend(list(Path(file.resolve()).iterdir()))
         else:
+            if args.d:
+                cursor.execute("SELECT COUNT(*) FROM images WHERE original_file = ?",
+                               (str(file.resolve().relative_to(cwd)),))
+                if cursor.fetchone()[0] > 0:
+                    continue
+
             image = cv2.imread(str(file.resolve()))
             h, v, b = generate_flipped(image)
 
@@ -157,7 +162,8 @@ def run_generate(args):
             if args.c:
                 cv2.imwrite(str(new_image_name.resolve()), image)
                 if args.d:
-                    image_to_database(image, str(new_image_name.resolve().relative_to(cwd)), str(file.resolve().relative_to(cwd)), cursor)
+                    image_to_database(image, str(new_image_name.resolve().relative_to(cwd)),
+                                      str(file.resolve().relative_to(cwd)), cursor)
                     connection.commit()
 
             if args.a or args.z:
@@ -185,23 +191,34 @@ def run_generate(args):
         connection.close()
 
 
-
 def main():
     parser = argparse.ArgumentParser(description="Preprocess images for use in the neural network")
     subparsers = parser.add_subparsers(dest='mode', required=True)
 
     generate_parser = subparsers.add_parser("generate", help="Generate images")
-    generate_parser.add_argument('-d', action='store_true', default=False, help="Add images to database of bounds and contours")
-    generate_parser.add_argument('-a', action='store_true', default=False, help="Generate all variations of the images (vertical flip, horizontal flip, both)")
-    generate_parser.add_argument('-v', action='store_true', default=False, help="Generate vertical flip variations of the images")
-    generate_parser.add_argument('-z', action='store_true', default=False, help="Generate horizontal flip variations of the images")
-    generate_parser.add_argument('-b', action='store_true', default=False, help="Generate images with both flips applied")
+    generate_parser.add_argument('-d', action='store_true', default=False,
+                                 help="Add images to database of bounds and contours")
+    generate_parser.add_argument('-a', action='store_true', default=False,
+                                 help="Generate all variations of the images (vertical flip, horizontal flip, both)")
+    generate_parser.add_argument('-v', action='store_true', default=False,
+                                 help="Generate vertical flip variations of the images")
+    generate_parser.add_argument('-z', action='store_true', default=False,
+                                 help="Generate horizontal flip variations of the images")
+    generate_parser.add_argument('-b', action='store_true', default=False,
+                                 help="Generate images with both flips applied")
     generate_parser.add_argument('-c', action='store_true', default=False, help="Copy original image as well")
-    generate_parser.add_argument('-u', action='store_true', default=False, help="Give images a unique id instead of their existing filename")
-    generate_parser.add_argument('-i', action='store_true', default=False, help="Insert the last directory name into the name of the image. Good for use with -u")
+    generate_parser.add_argument('-u', action='store_true', default=False,
+                                 help="Give images a unique id instead of their existing filename")
+    generate_parser.add_argument('-i', action='store_true', default=False,
+                                 help="Insert the last directory name into the name of the image. Good for use with -u")
     generate_parser.add_argument('-t', action='store', default='jpg', help="Image type to output")
     generate_parser.add_argument("res_folder", help="Folder to take images from")
     generate_parser.add_argument("output_folder", help="Folder to put the generated images into")
+
+    deep_parser = subparsers.add_parser("deep_generate", help="Generate images with various noise and brightnesses for use in deep learning")
+    deep_parser.add_argument("-n", default=10, type=int, help="Number of images to generate")
+    deep_parser.add_argument("res_folder", help="Folder to take images from")
+    deep_parser.add_argument("output_folder", help="Folder to put the generated images into")
 
     args = parser.parse_args()
 
