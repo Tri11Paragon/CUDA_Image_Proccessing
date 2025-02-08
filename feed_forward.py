@@ -1,3 +1,4 @@
+import math
 import os
 import cv2
 import argparse
@@ -18,179 +19,322 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import TensorDataset, DataLoader
 
 MAX_POINTS = 255
-CLASSES = 3 * 3
+IMAGE_SIZE = 24
+CLASSES = 3
+NUM_COLORS = 3
+
+
+TOTAL_IMAGE_SIZE = IMAGE_SIZE * IMAGE_SIZE
 
 def preprocess_contour(contour):
     contour = np.array(contour, dtype=np.float32)
+    contour = contour.flatten()
 
     # Normalize to [0,1]
     contour -= contour.min(axis=0)
     contour /= (contour.max(axis=0) + 1e-6)
 
-    # Flatten and pad
-    contour = contour.flatten()
-    padded = np.zeros(MAX_POINTS * 2 + 3, dtype=np.float32)
-    length = min(len(contour), MAX_POINTS * 2)
-    padded[:length] = contour[:length]
+    num_points = len(contour)
 
-    return padded
+    if num_points > MAX_POINTS:
+        indices = np.linspace(0, num_points - 1, MAX_POINTS * 2, dtype=int)
+        contour = contour[indices]
 
-def get_class_from_filename(path):
+    padded = np.zeros(MAX_POINTS * 2, dtype=np.float32)
+    padded[:len(contour)] = contour[:len(contour)]
+
+    return padded, num_points
+
+
+def preprocess_bounds(image, x, y, w, h):
+    cx, cy = x + w // 2, y + h // 2
+
+    x1 = max(cx - math.floor(IMAGE_SIZE / 2), 0)
+    y1 = max(cy - math.floor(IMAGE_SIZE / 2), 0)
+    x2 = min(cx + math.ceil(IMAGE_SIZE / 2), image.shape[1])
+    y2 = min(cy + math.ceil(IMAGE_SIZE / 2), image.shape[0])
+
+    cropped_region = image[y1:y2, x1:x2]
+
+    if cropped_region.shape[0] != IMAGE_SIZE or cropped_region.shape[1] != IMAGE_SIZE:
+        cropped_region = cv2.copyMakeBorder(
+            cropped_region,
+            top=max(0, IMAGE_SIZE - cropped_region.shape[0]),
+            bottom=0,
+            left=max(0, IMAGE_SIZE - cropped_region.shape[1]),
+            right=0,
+            borderType=cv2.BORDER_CONSTANT,
+            value=(0, 0, 0)  # Black padding
+        )
+
+    return np.array(cropped_region, dtype=np.float32).flatten() / 255.0
+
+def get_shape_class_from_filename(path):
+    parts = path.split('_')
+    t = parts[2]
+    if t == 't':
+        return 0
+    elif t == 'l':
+        return 1
+    elif t == 'z':
+        return 2
+    return 0
+
+def get_color_class_from_filename(path):
     parts = path.split('_')
     color = parts[1]
-    t = parts[2]
-    if t == "t":
-        if color == "grey":
-            return 0
-        elif color == "green":
-            return 1
-        elif color == "orange":
-            return 2
-    elif t == 'l':
-        if color == "grey":
-            return 3
-        elif color == "green":
-            return 4
-        elif color == "orange":
-            return 5
-    elif t == 't':
-        if color == "grey":
-            return 6
-        elif color == "green":
-            return 7
-        elif color == "orange":
-            return 8
+    if color == "grey":
+        return 0
+    elif color == "green":
+        return 1
+    elif color == "orange":
+        return 2
     return 0
 
 def load_data_from_db(args):
+    print("Loading data from database...")
     conn = sqlite3.connect(args.database)
     cursor = conn.cursor()
 
-    cursor.execute("SELECT c.contour, i.filename, b.x, b.y, b.width, b.height FROM contours c INNER JOIN images i ON c.image_id = i.id INNER JOIN bounds b ON i.id = b.image_id")
+    cursor.execute(
+        "SELECT c.contour, i.filename, b.x, b.y, b.width, b.height FROM contours c INNER JOIN images i ON c.image_id = i.id INNER JOIN bounds b on i.id = b.image_id")
     data = cursor.fetchall()
     conn.close()
 
-    X, Y = [], []
+    shape_data, color_data, shape_classification, color_classification = [], [], [], []
+    contour_length = 0
 
-    for contour_blob, image_path, x, y, w, h in data:
+    for contour_blob, image_path, x, y, width, height in data:
         contour = pickle.loads(contour_blob)
         image = cv2.imread(image_path)
 
-        contour_features = preprocess_contour(contour)
-        b, g, r = process.extract_color(image, contour)
+        contour_features, con_len = preprocess_contour(contour)
+        color_features = preprocess_bounds(image, x, y, width, height)
 
-        contour_features[-1] = b / 255.0
-        contour_features[-2] = g / 255.0
-        contour_features[-3] = r / 255.0
+        contour_length += con_len
 
-        X.append(contour_features)
-        Y.append(get_class_from_filename(image_path))
+        shape_data.append(contour_features)
+        color_data.append(color_features)
+        shape_classification.append(get_shape_class_from_filename(image_path))
+        color_classification.append(get_color_class_from_filename(image_path))
 
-    return torch.tensor(np.array(X), dtype=torch.float32), torch.tensor(np.array(Y), dtype=torch.long)
+    print(f"Average contour input length: {contour_length / float(len(data))}")
+
+    return (torch.tensor(np.array(shape_data), dtype=torch.float32), torch.tensor(np.array(color_data), dtype=torch.float32),
+            torch.tensor(np.array(shape_classification), dtype=torch.long), torch.tensor(np.array(color_classification), dtype=torch.long))
+
+def load_from_file(file):
+    return pickle.loads(open(file, "rb").read())
+
+def save_to_file(path : str, file):
+    with open(path, "wb") as f:
+        pickle.dump(file, f)
+
+def load_data(args):
+    if Path(args.t).exists():
+        print("Loading image data from cache file...")
+        return load_from_file(args.t)
+    return load_data_from_db(args)
+
+def save_data(args, data):
+    save_to_file(args.t, data)
 
 class ContourClassifier(nn.Module):
-    def __init__(self, input_size, num_classes):
+    def __init__(self, input_size, image_size):
         super().__init__()
-        self.fc = nn.Sequential(
-            nn.Linear(input_size, 128),
+        self.classifier = nn.Sequential(
+            nn.Linear(input_size, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
             nn.ReLU(),
             nn.Linear(128, 64),
             nn.ReLU(),
-            nn.Linear(64, num_classes),
+            nn.Linear(64, CLASSES),
+            nn.Softmax(1)
         )
-        self.classifier = nn.Softmax(1)
+        self.color_predictor = nn.Sequential(
+            nn.Linear(image_size, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, NUM_COLORS),
+            nn.Softmax(1)
+        )
 
     def forward(self, x):
-        features = self.fc(x)
-        class_output = self.classifier(features)
-        return class_output
+        return self.classifier(x[0]), self.color_predictor(x[1])
+
 
 def train(args):
-    X, Y = load_data_from_db(args)
+    shape_data, color_data, shape_classification, color_classification = load_data(args)
+    print("loaded image data...")
 
-    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.1, random_state=42)
+    X_train0, X_test0, Y_train0, Y_test0 = train_test_split(shape_data, shape_classification, test_size=0.1, random_state=42)
+    X_train1, X_test1, Y_train1, Y_test1 = train_test_split(color_data, color_classification, test_size=0.1, random_state=42)
+    print("Loaded train/test split data at rate of 0.1")
 
-    train_dataset = TensorDataset(X_train, Y_train)
-    test_dataset = TensorDataset(X_test, Y_test)
+    train_dataset = TensorDataset(X_train0, X_train1, Y_train0, Y_train1)
+    test_dataset = TensorDataset(X_test0, X_test1, Y_test0, Y_test1)
 
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=int(len(X_train0) / 8), shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=int(len(X_train0) / 8), shuffle=False)
+    print("Finished loading dataset")
 
-    input_size = X.shape[1]
-    num_classes = CLASSES
-    model = ContourClassifier(input_size, num_classes)
+    print(shape_data.shape)
+    print(color_data.shape)
 
-    criterion_class = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    model = ContourClassifier(shape_data.shape[1], color_data.shape[1])
+    model.train()
+    if Path(args.model).exists():
+        model = torch.load(args.model, weights_only=False)
+        print(f"Loading model from {args.model}...")
 
-    print("Image loading complete, beginning training")
+    criterion_class_shape = nn.CrossEntropyLoss()
+    criterion_class_color = nn.CrossEntropyLoss()
+    # optimizer = optim.Adam(model.parameters(), lr=1e-2, weight_decay=1e-5)
+    optimizer_shape = optim.SGD(model.parameters(), lr=0.00001, momentum=0.9, weight_decay=5e-4)
+    optimizer_color = optim.SGD(model.parameters(), lr=0.001, momentum=0.9, weight_decay=5e-4)
+
+    print("Image loading complete, beginning training...")
 
     should_exit = False
     for epoch in range(args.e):
+        average_loss_shape = 0
+        average_loss_color = 0
         try:
-            average_loss = 0
             runs = 0
-            for batch_X, batch_Y in train_loader:
-                optimizer.zero_grad()
-                class_pred = model(batch_X)
+            for batch_X_shape, batch_X_color, batch_Y_shape, batch_Y_color in train_loader:
+                optimizer_shape.zero_grad()
+                optimizer_color.zero_grad()
+                class_pred, color_pred = model([batch_X_shape, batch_X_color])
 
-                loss = criterion_class(class_pred, batch_Y)
-                average_loss += loss.item()
+                class_loss = criterion_class_shape(class_pred, batch_Y_shape)
+                color_loss = criterion_class_color(color_pred, batch_Y_color)
+                average_loss_shape += class_loss.item()
+                average_loss_color += color_loss.item()
                 runs += 1
 
-                loss.backward()
-                optimizer.step()
-            print(f"Epoch {epoch + 1}, Loss: {average_loss / runs:.4f}, {runs}")
+                class_loss.backward()
+                color_loss.backward()
+                optimizer_shape.step()
+                optimizer_color.step()
+            print(f"Epoch {epoch + 1}, Loss Shape: {average_loss_shape / runs:.7f}, Loss Color: {average_loss_color / runs:.7f} {runs}")
         except KeyboardInterrupt:
             should_exit = True
             break
 
-    torch.save(model.state_dict(), args.model)
+    torch.save(model, args.model)
     model.eval()
     print(f"Saved model as {args.model}")
 
     if should_exit:
+        save_data(args, (shape_data, color_data, shape_classification, color_classification))
         exit(0)
 
-    correct = 0
+    correct_both = 0
+    correct_shape = 0
+    correct_color = 0
+    incorrect = 0
     total = 0
 
     with torch.no_grad():
-        for batch_X, batch_Y in test_loader:
-            class_pred = model(batch_X)
+        for batch_X_shape, batch_X_color, batch_Y_shape, batch_Y_color in test_loader:
+            class_pred, color_pred = model([batch_X_shape, batch_X_color])
 
-            print(class_pred)
             predicted_classes = torch.argmax(class_pred, dim=1)
+            predicted_color = torch.argmax(color_pred, dim=1)
 
-            correct += (predicted_classes == batch_Y).sum().item()
-            total += batch_Y.size(0)
+            for pred_shape, pred_color, shape_label, color_label in zip(predicted_classes, predicted_color, batch_Y_shape, batch_Y_color):
+                if pred_shape == shape_label:
+                    if pred_color == color_label:
+                        correct += 1
+                    else:
+                        correct_shape += 1
+                else:
+                    if pred_color == color_label:
+                        correct_color += 1
+                    else:
+                        incorrect += 1
+            total += batch_Y_shape.size(0)
 
-    accuracy = 100 * correct / total
+    accuracy = 100 * correct_both / total
     print(f"Test Accuracy: {accuracy:.2f}%")
+    print(f"Correct Shape: {correct_shape}%")
+    print(f"Correct Color: {correct_color}%")
+    print(f"Incorrect: {incorrect}%")
+    print(f"Total: {total}%")
+    save_data(args, (shape_data, color_data, shape_classification, color_classification))
 
 
 def use(args):
-    X, Y = load_data_from_db(args)
-    dataset = TensorDataset(X, Y)
+    shape_data, color_data, shape_classification, color_classification = load_data(args)
 
-    input_size = X.shape[1]
-    num_classes = CLASSES
+    X_train0, X_test0, Y_train0, Y_test0 = train_test_split(shape_data, shape_classification, test_size=0.1, random_state=42)
+    X_train1, X_test1, Y_test1, Y_test1 = train_test_split(color_data, color_classification, test_size=0.1, random_state=42)
 
-    model = ContourClassifier(input_size, num_classes)
-    model.load_state_dict(torch.load(args.model))
+    test_dataset = TensorDataset(X_test0, X_test1, Y_test0, Y_test1)
+
+    test_loader = DataLoader(test_dataset, batch_size=int(len(X_train1) / 16), shuffle=False)
+
+    model = torch.load(args.model, weights_only=False)
     model.eval()
 
+    correct = 0
+    correct_color = 0
+    correct_shape = 0
+    incorrect = 0
+    total = 0
+
+    with torch.no_grad():
+        for batch_X_shape, batch_X_color, batch_Y_shape, batch_Y_color in test_loader:
+            class_pred, color_pred = model([batch_X_shape, batch_X_color])
+
+            predicted_classes = torch.argmax(class_pred, dim=1)
+            predicted_color = torch.argmax(color_pred, dim=1)
+
+            print(class_pred)
+            print(batch_Y_shape)
+            print(predicted_classes)
+
+            for pred_shape, pred_color, shape_label, color_label in zip(predicted_classes, predicted_color, batch_Y_shape, batch_Y_color):
+                if pred_shape == shape_label:
+                    if pred_color == color_label:
+                        correct += 1
+                    else:
+                        correct_shape += 1
+                else:
+                    if pred_color == color_label:
+                        correct_color += 1
+                    else:
+                        incorrect += 1
+            total += batch_Y_shape.size(0)
+
+    accuracy = 100 * correct / total
+    print(f"Correct {correct}")
+    print(f"Correct Color {correct_color}")
+    print(f"Correct Shape {correct_shape}")
+    print(f"Incorrect {incorrect}")
+    print(f"Total {total}")
+    print(f"Test Accuracy: {accuracy:.2f}%")
+
+
 def main():
+    print(torch.__config__.show())
+    torch.set_num_threads(torch.get_num_threads())
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest='mode', required=True)
 
     train_parser = subparsers.add_parser("train", help="Train the network")
 
     train_parser.add_argument('-e', default=100, help="Epochs", type=int)
+    train_parser.add_argument('-t', default="image_data.tmp.dat", help="Image data cache file", type=str)
     train_parser.add_argument("database", help="Image database path")
     train_parser.add_argument("model", help="Model path")
 
     use_parser = subparsers.add_parser("use", help="Use the network")
+    use_parser.add_argument('-t', default="image_data.tmp.dat", help="Image data cache file", type=str)
     use_parser.add_argument("database", help="Image database path")
     use_parser.add_argument("model", help="Model path")
 
@@ -200,6 +344,7 @@ def main():
         train(args)
     elif args.mode == "use":
         use(args)
+
 
 if __name__ == '__main__':
     main()

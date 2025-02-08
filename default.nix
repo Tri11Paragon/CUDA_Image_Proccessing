@@ -22,6 +22,8 @@ pkgs.mkShell
 	    	pip.requests
 			pip.numpy
 			(pip.opencv4.override { enableGtk2 = true; })
+			pip.torch
+			pip.scikit-learn
 #			pip.torchWithRocm
 	    ]))
   	];

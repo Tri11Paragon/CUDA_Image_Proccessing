@@ -1,0 +1,15 @@
+Correct 1601
+Correct Color 54
+Correct Shape 177
+Incorrect 53
+Total 1885
+Test Accuracy: 84.93%
+
+        self.fc = nn.Sequential(
+            nn.Linear(input_size, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, num_classes),
+        )
+        self.classifier = nn.Softmax(1)
