@@ -13,7 +13,7 @@ pkgs.mkShell
 	];
 
 	propagatedBuildInputs = with customPkgs; [
-		customPkgs.rocmPackages_5.hipblaslt		
+#		customPkgs.rocmPackages_5.hipblaslt		
 	];
 
 	packages = [

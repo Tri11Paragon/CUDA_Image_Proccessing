@@ -20,7 +20,7 @@ def generate_flipped(img):
     return img_h, img_v, img_hv
 
 
-def add_gaussian_noise(image, factor = 0.5, mean=0, std=25):
+def add_gaussian_noise(image, factor=0.5, mean=0, std=25):
     noise = np.random.normal(mean, std, image.shape).astype(np.uint8)
     noisy_image = cv2.addWeighted(image, 1 - factor, noise, factor, 0)
     return noisy_image
@@ -63,7 +63,7 @@ def add_salt_and_pepper_noise(image, salt_prob=0.02, pepper_prob=0.02):
     return noisy
 
 
-def add_poisson_noise(image, factor = 1):
+def add_poisson_noise(image, factor=1):
     noisy = image
     for i in range(0, int(factor)):
         noisy = np.random.poisson(noisy.astype(np.float32))
@@ -132,6 +132,16 @@ def run_generate(args):
                 FOREIGN KEY(image_id) REFERENCES images(id)
             )
         """)
+
+        cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS extra_images (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            image_id INTEGER,
+                            filename TEXT,
+                            FOREIGN KEY(image_id) REFERENCES images(id)
+                        )
+                    """)
+
         connection.commit()
 
     files = list(Path(args.res_folder).iterdir())
@@ -192,15 +202,18 @@ def run_generate(args):
     if args.d:
         connection.close()
 
+
 def extra_image_to_database(path, original_id, cursor):
     cursor.execute("""
                     INSERT INTO extra_images (image_id, filename)
                     VALUES (?, ?)
                 """, (original_id, path))
 
+
 def get_all_images(cursor):
     cursor.execute("SELECT * FROM images")
     return cursor.fetchall()
+
 
 def update_image_filename_with_path(cursor, image_id):
     cursor.execute("SELECT filename FROM images WHERE id = ?", (image_id,))
@@ -223,6 +236,7 @@ def update_image_filename_with_path(cursor, image_id):
 
     print(f"Updated image ID {image_id}: {old_filename} -> {new_filename}")
 
+
 def deep_generate(args):
     output_path = Path(args.output_folder)
     image_path = output_path.joinpath("images")
@@ -240,15 +254,6 @@ def deep_generate(args):
 
     connection = sqlite3.connect(database_path)
     cursor = connection.cursor()
-
-    cursor.execute("""
-                CREATE TABLE IF NOT EXISTS extra_images (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    image_id INTEGER,
-                    filename TEXT,
-                    FOREIGN KEY(image_id) REFERENCES images(id)
-                )
-            """)
 
     for image in get_all_images(cursor):
         image_id, filename, original_file = image
@@ -290,13 +295,14 @@ def deep_generate(args):
         for i in range(0, args.n):
             brightness_value = value_min + value_step * i
             brightness_image = adjust_brightness(image, brightness_value)
-            path = str(brightness / (Path(filename).stem + "_bright" + str(round(brightness_value, 5)) + Path(filename).suffix))
+            path = str(brightness / (
+                        Path(filename).stem + "_bright" + str(round(brightness_value, 5)) + Path(filename).suffix))
             cv2.imwrite(path, brightness_image)
             extra_image_to_database(path, image_id, cursor)
 
-    
     connection.commit()
     connection.close()
+
 
 def main():
     parser = argparse.ArgumentParser(description="Preprocess images for use in the neural network")
@@ -322,7 +328,8 @@ def main():
     generate_parser.add_argument("res_folder", help="Folder to take images from")
     generate_parser.add_argument("output_folder", help="Folder to put the generated images into")
 
-    deep_parser = subparsers.add_parser("deep_generate", help="Generate images with various noise and brightnesses for use in deep learning")
+    deep_parser = subparsers.add_parser("deep_generate",
+                                        help="Generate images with various noise and brightnesses for use in deep learning")
     deep_parser.add_argument("-n", default=10, type=int, help="Number of images to generate")
     deep_parser.add_argument("res_folder", help="Folder to take images from")
     deep_parser.add_argument("output_folder", help="Folder to put the generated images into")
@@ -336,6 +343,7 @@ def main():
         run_generate(args)
     if args.mode == "deep_generate":
         deep_generate(args)
+
 
 if __name__ == "__main__":
     main()
