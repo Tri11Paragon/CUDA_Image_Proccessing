@@ -1,3 +1,5 @@
 ip
 *.env
-
+res/deep_generated/*
+res/deep_generated
+image_data.tmp.dat

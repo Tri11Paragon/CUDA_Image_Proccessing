@@ -18,7 +18,7 @@ import torch.optim as optim
 from sklearn.model_selection import train_test_split
 from torch.utils.data import TensorDataset, DataLoader
 
-MAX_POINTS = 255
+MAX_POINTS = 512
 IMAGE_SIZE = 24
 CLASSES = 3
 NUM_COLORS = 3
@@ -142,15 +142,32 @@ def save_data(args, data):
 class ContourClassifier(nn.Module):
     def __init__(self, input_size, image_size):
         super().__init__()
+        print(input_size, image_size)
+        self.class_begin = nn.Sequential(
+            nn.Linear(input_size, 1024),
+            nn.ReLU(),
+            nn.Linear(1024, 32),
+        )
+        self.attention = nn.MultiheadAttention(embed_dim=32, num_heads=8, batch_first=True)
         self.classifier = nn.Sequential(
-            nn.Linear(input_size, 256),
-            nn.ReLU(),
-            nn.Linear(256, 128),
-            nn.ReLU(),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, CLASSES),
-            nn.Softmax(1)
+            nn.Sequential(
+                nn.Linear(input_size, 64),
+                nn.LeakyReLU(),
+                nn.Linear(64, 64),
+                nn.LeakyReLU(),
+                nn.Linear(64, 64),
+                nn.LeakyReLU(),
+                nn.Linear(64, 64),
+                nn.LeakyReLU(),
+            ),
+            nn.LeakyReLU(),
+            nn.Linear(64, 32 * 3),
+            nn.LeakyReLU(),
+            nn.Linear(32 * 3, 32),
+            nn.Linear(32, 16),
+
+            nn.Linear(16, CLASSES),
+            # nn.Softmax(1)
         )
         self.color_predictor = nn.Sequential(
             nn.Linear(image_size, 256),
@@ -160,15 +177,18 @@ class ContourClassifier(nn.Module):
             nn.Linear(128, 64),
             nn.ReLU(),
             nn.Linear(64, NUM_COLORS),
-            nn.Softmax(1)
+            # nn.Softmax(1)
         )
 
     def forward(self, x):
+        # data = self.class_begin(x[0])
+        # atten, _ = self.attention(data, data, data)
         return self.classifier(x[0]), self.color_predictor(x[1])
 
 
 def train(args):
     shape_data, color_data, shape_classification, color_classification = load_data(args)
+    save_data(args, (shape_data, color_data, shape_classification, color_classification))
     print("loaded image data...")
 
     X_train0, X_test0, Y_train0, Y_test0 = train_test_split(shape_data, shape_classification, test_size=0.1, random_state=42)
@@ -193,8 +213,8 @@ def train(args):
 
     criterion_class_shape = nn.CrossEntropyLoss()
     criterion_class_color = nn.CrossEntropyLoss()
-    # optimizer = optim.Adam(model.parameters(), lr=1e-2, weight_decay=1e-5)
-    optimizer_shape = optim.SGD(model.parameters(), lr=0.00001, momentum=0.9, weight_decay=5e-4)
+    optimizer_shape = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
+    # optimizer_shape = optim.SGD(model.parameters(), lr=0.001, momentum=0.9, weight_decay=5e-4)
     optimizer_color = optim.SGD(model.parameters(), lr=0.001, momentum=0.9, weight_decay=5e-4)
 
     print("Image loading complete, beginning training...")
@@ -206,20 +226,29 @@ def train(args):
         try:
             runs = 0
             for batch_X_shape, batch_X_color, batch_Y_shape, batch_Y_color in train_loader:
-                optimizer_shape.zero_grad()
-                optimizer_color.zero_grad()
+                if args.s:
+                    optimizer_shape.zero_grad()
+
+                if args.c:
+                    optimizer_color.zero_grad()
+
                 class_pred, color_pred = model([batch_X_shape, batch_X_color])
 
-                class_loss = criterion_class_shape(class_pred, batch_Y_shape)
-                color_loss = criterion_class_color(color_pred, batch_Y_color)
-                average_loss_shape += class_loss.item()
-                average_loss_color += color_loss.item()
+                if args.s:
+                    class_loss = criterion_class_shape(class_pred, batch_Y_shape)
+                    average_loss_shape += class_loss.item()
+                if args.c:
+                    color_loss = criterion_class_color(color_pred, batch_Y_color)
+                    average_loss_color += color_loss.item()
                 runs += 1
 
-                class_loss.backward()
-                color_loss.backward()
-                optimizer_shape.step()
-                optimizer_color.step()
+                if args.s:
+                    class_loss.backward()
+                    optimizer_shape.step()
+                if args.c:
+                    color_loss.backward()
+                    optimizer_color.step()
+
             print(f"Epoch {epoch + 1}, Loss Shape: {average_loss_shape / runs:.7f}, Loss Color: {average_loss_color / runs:.7f} {runs}")
         except KeyboardInterrupt:
             should_exit = True
@@ -230,7 +259,6 @@ def train(args):
     print(f"Saved model as {args.model}")
 
     if should_exit:
-        save_data(args, (shape_data, color_data, shape_classification, color_classification))
         exit(0)
 
     correct_both = 0
@@ -265,7 +293,6 @@ def train(args):
     print(f"Correct Color: {correct_color}%")
     print(f"Incorrect: {incorrect}%")
     print(f"Total: {total}%")
-    save_data(args, (shape_data, color_data, shape_classification, color_classification))
 
 
 def use(args):
@@ -330,6 +357,8 @@ def main():
 
     train_parser.add_argument('-e', default=100, help="Epochs", type=int)
     train_parser.add_argument('-t', default="image_data.tmp.dat", help="Image data cache file", type=str)
+    train_parser.add_argument('-s', action='store_true', default=False, help="Train shape classifier")
+    train_parser.add_argument('-c', action='store_true', default=False, help="Train color classifier")
     train_parser.add_argument("database", help="Image database path")
     train_parser.add_argument("model", help="Model path")
 
