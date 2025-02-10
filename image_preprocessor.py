@@ -215,6 +215,36 @@ def get_all_images(cursor):
     return cursor.fetchall()
 
 
+def update_image_contours_and_bounds(image, cursor, image_id):
+    new_bounds = process.find_bounds_and_contours(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY))
+
+    cursor.execute("DELETE FROM bounds WHERE image_id = ?", (image_id,))
+    cursor.execute("DELETE FROM contours WHERE image_id = ?", (image_id, ))
+
+    for bound, con in new_bounds:
+        x, y, w, h = bound
+        serialized_contour = pickle.dumps(con)
+
+        cursor.execute("""
+                INSERT INTO contours (image_id, contour)
+                VALUES (?, ?)
+            """, (image_id, serialized_contour))
+
+        cursor.execute("""
+                INSERT INTO bounds (image_id, x, y, width, height)
+                VALUES (?, ?, ?, ?, ?)
+            """, (image_id, x, y, w, h))
+
+def update_all_images(args):
+    connection = sqlite3.connect(args.database)
+    cursor = connection.cursor()
+
+    for image in get_all_images(cursor):
+        image_id, filename, original_file = image
+        image = cv2.imread(filename)
+        print (f"Processing file {filename}")
+        update_image_contours_and_bounds(image, cursor, image_id)
+
 def update_image_filename_with_path(cursor, image_id):
     cursor.execute("SELECT filename FROM images WHERE id = ?", (image_id,))
     result = cursor.fetchone()
@@ -335,15 +365,19 @@ def main():
     deep_parser.add_argument("output_folder", help="Folder to put the generated images into")
     deep_parser.add_argument("database", help="Database with image information in it (this will be copied)")
 
+    update_parser = subparsers.add_parser("update", help="Update images within the database")
+    update_parser.add_argument("database", help="Database with image information in it (this will be copied)")
+
     args = parser.parse_args()
 
-    Path(args.output_folder).mkdir(parents=True, exist_ok=True)
-
     if args.mode == "generate":
+        Path(args.output_folder).mkdir(parents=True, exist_ok=True)
         run_generate(args)
     if args.mode == "deep_generate":
+        Path(args.output_folder).mkdir(parents=True, exist_ok=True)
         deep_generate(args)
-
+    if args.mode == "update":
+        update_all_images(args)
 
 if __name__ == "__main__":
     main()

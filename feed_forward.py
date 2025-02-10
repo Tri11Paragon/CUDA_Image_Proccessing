@@ -7,6 +7,7 @@ import datetime
 import camera
 import process
 import basic_classify as c
+import image_preprocessor as ip
 from pathlib import Path
 import pickle
 import sqlite3
@@ -15,6 +16,7 @@ import shutil
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from collections import deque
 from sklearn.model_selection import train_test_split
 from torch.utils.data import TensorDataset, DataLoader
 
@@ -348,9 +350,70 @@ def use(args):
     print(f"Total {total}")
     print(f"Test Accuracy: {accuracy:.2f}%")
 
+def use_camera(data_buffer, model, image):
+    if image is None:
+        return
+
+    thresh = process.threshold_image(image)
+    grey = cv2.cvtColor(thresh, cv2.COLOR_BGR2GRAY)
+    bounds = process.find_bounds_and_contours(grey)
+
+    if len(bounds) == 0:
+        for buffer1, buffer2 in data_buffer:
+            buffer1.clear()
+            buffer2.clear()
+        cv2.imshow("Window Me", image)
+        return
+
+    for i, data in enumerate(bounds):
+        bound, con = data
+        if i > len(data_buffer):
+            continue
+        buffer1, buffer2 = data_buffer[i]
+
+        contour_features, con_len = preprocess_contour(con)
+        x, y, w, h = bound
+        color_data = preprocess_bounds(image, x, y, w, h)
+
+        buffer1.append(contour_features)
+        buffer2.append(color_data)
+
+
+        shape_tensor = torch.tensor(np.array(list(buffer1)), dtype=torch.float32)
+        color_tensor = torch.tensor(np.array(list(buffer2)), dtype=torch.float32)
+
+        class_pred, color_pred = model([shape_tensor, color_tensor])
+
+        predicted_classes = torch.argmax(class_pred, dim=1)
+        predicted_color = torch.argmax(color_pred, dim=1)
+
+        shape_prediction, count = torch.mode(predicted_classes)
+        color_prediction, count = torch.mode(predicted_color)
+
+        pred_class = "Unknown Shape"
+        if shape_prediction == 0:
+            pred_class = "T Shape"
+        elif shape_prediction == 1:
+            pred_class = "L Shape"
+        elif shape_prediction == 2:
+            pred_class = "Z Shape"
+
+        pred_color = "Unknown Color"
+        if color_prediction == 0:
+            pred_color = "Gray Color"
+        elif color_prediction == 1:
+            pred_color = "Green Color"
+        elif color_prediction == 2:
+            pred_color = "Orange color"
+
+        cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        cv2.drawContours(image, [con], -1, (255, 255, 255), 2)
+        cv2.putText(image, "Predicted Class " + str(pred_class), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
+        cv2.putText(image, "Predicted Color " + str(pred_color), (x, y + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
+
+    cv2.imshow("Window Me", image)
 
 def main():
-    print(torch.__config__.show())
     torch.set_num_threads(torch.get_num_threads())
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest='mode', required=True)
@@ -366,15 +429,28 @@ def main():
 
     use_parser = subparsers.add_parser("use", help="Use the network")
     use_parser.add_argument('-t', default="image_data.tmp.dat", help="Image data cache file", type=str)
+    use_parser.add_argument('-c', action='store_true', default=False, help="Use the network on the camera")
     use_parser.add_argument("database", help="Image database path")
     use_parser.add_argument("model", help="Model path")
 
     args = parser.parse_args()
 
     if args.mode == "train":
+        print(torch.__config__.show())
         train(args)
     elif args.mode == "use":
-        use(args)
+        if args.c:
+            model = torch.load(args.model, weights_only=False)
+            model.eval()
+            buffer_size = 120
+            data_buffer = {}
+            for i in range(0, 10):
+                buffer1 = deque(maxlen=buffer_size)
+                buffer2 = deque(maxlen=buffer_size)
+                data_buffer[i] = (buffer1, buffer2)
+            camera.open_camera("local/", lambda image, w, h: use_camera(data_buffer, model, image))
+        else:
+            use(args)
 
 
 if __name__ == '__main__':
