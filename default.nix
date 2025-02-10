@@ -24,7 +24,8 @@ pkgs.mkShell
 			(pip.opencv4.override { enableGtk2 = true; })
 			pip.torch
 			pip.scikit-learn
-#			pip.torchWithRocm
+			(pip.callPackage ./dearpygui.nix {})
+			pip.torchWithRocm
 	    ]))
   	];
 	LD_LIBRARY_PATH="/run/opengl-driver/lib:/run/opengl-driver-32/lib";

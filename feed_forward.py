@@ -23,7 +23,6 @@ IMAGE_SIZE = 24
 CLASSES = 3
 NUM_COLORS = 3
 
-
 TOTAL_IMAGE_SIZE = IMAGE_SIZE * IMAGE_SIZE
 
 def preprocess_contour(contour):
@@ -143,29 +142,32 @@ class ContourClassifier(nn.Module):
     def __init__(self, input_size, image_size):
         super().__init__()
         print(input_size, image_size)
-        self.class_begin = nn.Sequential(
-            nn.Linear(input_size, 1024),
-            nn.ReLU(),
-            nn.Linear(1024, 32),
-        )
-        self.attention = nn.MultiheadAttention(embed_dim=32, num_heads=8, batch_first=True)
+        # self.class_begin = nn.Sequential(
+        #     nn.Linear(input_size, 1024),
+        #     nn.ReLU(),
+        #     nn.Linear(1024, 32),
+        # )
+        # self.attention = nn.MultiheadAttention(embed_dim=32, num_heads=8, batch_first=True)
         self.classifier = nn.Sequential(
             nn.Sequential(
-                nn.Linear(input_size, 64),
+                nn.Linear(input_size, 128),
                 nn.LeakyReLU(),
-                nn.Linear(64, 64),
+                nn.Linear(128, 128),
                 nn.LeakyReLU(),
-                nn.Linear(64, 64),
+                nn.Linear(128, 128),
                 nn.LeakyReLU(),
-                nn.Linear(64, 64),
+                nn.Linear(128, 128),
                 nn.LeakyReLU(),
             ),
             nn.LeakyReLU(),
-            nn.Linear(64, 32 * 3),
+            nn.Linear(128, 128 * 3),
             nn.LeakyReLU(),
-            nn.Linear(32 * 3, 32),
-            nn.Linear(32, 16),
-
+            nn.Linear(128 * 3, 128*3),
+            nn.LeakyReLU(),
+            nn.Linear(128*3, 128),
+            nn.LeakyReLU(),
+			nn.Linear(128, 16),
+			nn.LeakyReLU(),
             nn.Linear(16, CLASSES),
             # nn.Softmax(1)
         )
@@ -277,7 +279,7 @@ def train(args):
             for pred_shape, pred_color, shape_label, color_label in zip(predicted_classes, predicted_color, batch_Y_shape, batch_Y_color):
                 if pred_shape == shape_label:
                     if pred_color == color_label:
-                        correct += 1
+                        correct_both += 1
                     else:
                         correct_shape += 1
                 else:
