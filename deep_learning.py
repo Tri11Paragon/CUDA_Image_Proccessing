@@ -46,7 +46,7 @@ class Network:
         self.criterion = nn.CrossEntropyLoss()
         # self.optimizer = optim.SGD(self.net.parameters(), lr=0.001, momentum=0.9)
         self.optimizer = optim.Adam(self.net.parameters(), lr=1e-3, weight_decay=1e-5)
-        self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', patience=200, factor=0.1)
+        self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', patience=20, factor=0.1)
         if database_path is not None:
             self.connection = sqlite3.connect(database_path)
             self.cursor = self.connection.cursor()
