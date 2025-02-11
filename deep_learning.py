@@ -38,7 +38,7 @@ class Network:
     def __init__(self, model_file, database_path, batch_size = 4096, image_type = False):
         self.model_file = model_file
         if Path(model_file).exists():
-            self.net = torch.load(model_file)
+            self.net = torch.load(model_file, weights_only=False)
         else:
             self.net = CNNShapeNetwork()
         self.criterion = nn.CrossEntropyLoss()
