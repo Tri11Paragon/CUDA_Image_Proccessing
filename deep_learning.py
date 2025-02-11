@@ -1,37 +1,27 @@
-import math
-import os
+import faulthandler
+
 import cv2
 import argparse
 import numpy as np
-import datetime
-import camera
-import process
-import basic_classify as c
-import image_preprocessor as ip
 from pathlib import Path
 import pickle
 import sqlite3
-import random
-import shutil
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from collections import deque
-from sklearn.model_selection import train_test_split
-from torch.utils.data import TensorDataset, DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import feed_forward as ff
 
-NETWORK_INPUT_SIZE = 128
+NETWORK_INPUT_SIZE = 64
 
 class CNNShapeNetwork(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 16, (5, 5))
+        self.conv1 = nn.Conv2d(1, 6, (5, 5))
         self.pool = nn.MaxPool2d((2, 2), (2, 2))
-        self.conv2 = nn.Conv2d(16, 32, (5, 5))
-        self.fc1 = nn.Linear(26912, 128)
+        self.conv2 = nn.Conv2d(6, 16, (5, 5))
+        self.fc1 = nn.Linear(2704, 128)
         self.fc2 = nn.Linear(128, 84)
         self.fc3 = nn.Linear(84, ff.CLASSES)
 
@@ -52,20 +42,21 @@ class Network:
         else:
             self.net = CNNShapeNetwork()
         self.criterion = nn.CrossEntropyLoss()
-        self.optimizer = optim.SGD(self.net.parameters(), lr=0.001, momentum=0.9)
+        # self.optimizer = optim.SGD(self.net.parameters(), lr=0.001, momentum=0.9)
+        self.optimizer = optim.Adam(self.net.parameters(), lr=1e-3, weight_decay=1e-5)
         self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', patience=200, factor=0.1)
         self.connection = sqlite3.connect(database_path)
         self.cursor = self.connection.cursor()
         self.batch_size = batch_size
         self.batch_images = np.empty((batch_size, NETWORK_INPUT_SIZE, NETWORK_INPUT_SIZE), dtype=np.float32)
-        self.batch_class = np.empty((batch_size, 3), dtype=np.float32)
+        self.batch_class = np.empty((batch_size,), dtype=np.longlong)
 
 
     def load_images(self):
         print("Loading new image batch")
         self.cursor.execute(
             "SELECT i.filename, i2.filename, b.x, b.y, b.width, b.height FROM extra_images i INNER JOIN images i2 ON i2.id = i.image_id" +
-            " INNER JOIN bounds b ON i.id = b.image_id ORDER BY RANDOM() LIMIT ?", (self.batch_size,))
+            " INNER JOIN bounds b ON i.image_id = b.image_id ORDER BY RANDOM() LIMIT ?", (self.batch_size,))
         data = self.cursor.fetchall()
 
         for i, image_data in enumerate(data):
@@ -81,14 +72,10 @@ class Network:
             image = cv2.resize(image, (NETWORK_INPUT_SIZE, NETWORK_INPUT_SIZE), interpolation=cv2.INTER_AREA).astype(np.float32)
 
             self.batch_images[i] = image
-            self.batch_class[i][0] = 0
-            self.batch_class[i][1] = 0
-            self.batch_class[i][2] = 0
-            self.batch_class[i][ff.get_shape_class_from_filename(filename)] = 1
-            # print(filename)
+            self.batch_class[i] = ff.get_shape_class_from_filename(filename)
         print("Loading of images complete")
 
-    def train(self, epochs, batch_process = 256):
+    def train(self, epochs, batch_process = 16):
         self.net.train()
         for epoch in range(epochs):
             self.load_images()
@@ -99,15 +86,13 @@ class Network:
                 index = 0
 
                 while index < self.batch_size:
+                    self.optimizer.zero_grad()
                     end_index = min(self.batch_size, index + batch_process)
                     image_data = torch.tensor(self.batch_images[index:end_index], dtype=torch.float32)
                     image_data = image_data.unsqueeze(1)
-                    class_data = torch.tensor(self.batch_class[index:end_index], dtype=torch.float32)
+                    class_data = torch.tensor(self.batch_class[index:end_index], dtype=torch.long)
 
                     pred = self.net(image_data)
-
-                    # predicted_classes = torch.argmax(pred, dim=1)
-                    # print(predicted_classes)
 
                     loss = self.criterion(pred, class_data)
                     average_loss += loss.item()
@@ -117,7 +102,9 @@ class Network:
                     self.optimizer.step()
 
                     index = end_index
+                    print(f"Ran mini-batch with loss: {loss.item()}")
 
+                self.scheduler.step(average_loss)
                 print(f"Average loss for epoch {epoch} was {average_loss / runs}")
             except KeyboardInterrupt:
                 break
@@ -131,6 +118,8 @@ class Network:
 
 
 def main():
+    faulthandler.enable()
+    print(f"Using {torch.get_num_threads()} threads")
     parser = argparse.ArgumentParser()
     subparser = parser.add_subparsers(dest="mode", required=True)
 
