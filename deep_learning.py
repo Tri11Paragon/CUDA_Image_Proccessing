@@ -162,14 +162,14 @@ def main():
     trainer.add_argument("model", help="Model file to store the network")
     trainer.add_argument("--epochs", "-e", type=int, default=10000, help="Number of epochs to train")
     trainer.add_argument("--batch-size", '-b', dest='b', type=int, default=4096, help="Batch size")
-    trainer.add_argument("-d", type='store_true', default=False, help="Use the normal database instead of the deep learning one")
+    trainer.add_argument("-d", action='store_true', default=False, help="Use the normal database instead of the deep learning one")
 
     tester = subparser.add_parser("test", help="Test the network")
     tester.add_argument("database", help="Database with image data in it")
     tester.add_argument("model", help="Model file to store the network")
     tester.add_argument("--test-size", '-t', dest='t', type=int, default=4096, help="Number of images to test")
     tester.add_argument("--batch-size", '-b', dest='b', type=int, default=4096, help="Batch size")
-    tester.add_argument("-d", type='store_true', default=False, help="Use the normal database instead of the deep learning one")
+    tester.add_argument("-d", action='store_true', default=False, help="Use the normal database instead of the deep learning one")
 
     args = parser.parse_args()
 
