@@ -143,7 +143,7 @@ class Network:
             test_size -= self.batch_size
 
         print(f"Correct: {correct} / Incorrect: {incorrect}")
-        print(f"Test set accuracy: {correct / test_size}")
+        print(f"Test set accuracy: {correct / (correct + incorrect)}")
 
     def __del__(self):
         self.connection.commit()
