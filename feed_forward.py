@@ -219,7 +219,7 @@ def train(args):
     criterion_class_shape = nn.CrossEntropyLoss()
     criterion_class_color = nn.CrossEntropyLoss()
     optimizer_shape = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
-    scheduler = ReduceLROnPlateau(optimizer_shape, mode='min', patience=10, factor=0.5, verbose=True)
+    scheduler = ReduceLROnPlateau(optimizer_shape, mode='min', patience=20, factor=0.5, verbose=True)
     # optimizer_shape = optim.SGD(model.parameters(), lr=0.001, momentum=0.9, weight_decay=5e-4)
     optimizer_color = optim.SGD(model.parameters(), lr=0.001, momentum=0.9, weight_decay=5e-4)
 
@@ -227,7 +227,8 @@ def train(args):
 
     should_exit = False
     for epoch in range(args.e):
-        if args.s and optimizer_shape.param_groups[0]['lr'] < 1e-6:
+        if args.s and scheduler.get_last_lr()[0] < 1e-6:
+            print("Early exit!")
             break
         average_loss_shape = 0
         average_loss_color = 0
@@ -251,13 +252,14 @@ def train(args):
                 runs += 1
 
                 if args.s:
-                    scheduler.step(class_loss)
                     class_loss.backward()
                     optimizer_shape.step()
                 if args.c:
                     color_loss.backward()
                     optimizer_color.step()
 
+            if args.s:
+                scheduler.step(average_loss_shape)
             print(f"Epoch {epoch + 1}, Loss Shape: {average_loss_shape / runs:.7f}, Loss Color: {average_loss_color / runs:.7f} {runs}")
         except KeyboardInterrupt:
             should_exit = True
