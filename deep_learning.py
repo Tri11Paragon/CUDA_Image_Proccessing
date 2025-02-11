@@ -12,6 +12,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import feed_forward as ff
+import camera
+import process
 
 NETWORK_INPUT_SIZE = 64
 
@@ -45,8 +47,12 @@ class Network:
         # self.optimizer = optim.SGD(self.net.parameters(), lr=0.001, momentum=0.9)
         self.optimizer = optim.Adam(self.net.parameters(), lr=1e-3, weight_decay=1e-5)
         self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', patience=200, factor=0.1)
-        self.connection = sqlite3.connect(database_path)
-        self.cursor = self.connection.cursor()
+        if database_path is not None:
+            self.connection = sqlite3.connect(database_path)
+            self.cursor = self.connection.cursor()
+        else:
+            self.connection = None
+            self.cursor = None
         self.batch_size = batch_size
         self.batch_images = np.empty((batch_size, NETWORK_INPUT_SIZE, NETWORK_INPUT_SIZE), dtype=np.float32)
         self.batch_class = np.empty((batch_size,), dtype=np.longlong)
@@ -146,9 +152,58 @@ class Network:
         print(f"Correct: {correct} / Incorrect: {incorrect}")
         print(f"Test set accuracy: {correct / (correct + incorrect)}")
 
+    def run_model_on_image(self, image):
+        if image is None:
+            return
+        bounds = process.find_bounds_and_contours(cv2.cvtColor(process.threshold_image(image.copy()), cv2.COLOR_BGR2GRAY))
+        if len(bounds) == 0:
+            cv2.imshow("Hello", image)
+            return
+
+        draw = image.copy()
+        print ("Running model on camera input")
+        images = []
+        for bound, con in bounds:
+            x,y,w,h = bound
+            bounded_image = ff.extract_image_from_bounds(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), x, y, w, h, max_size=4096)
+            bounded_image = cv2.resize(bounded_image, (NETWORK_INPUT_SIZE, NETWORK_INPUT_SIZE), interpolation=cv2.INTER_AREA).astype(np.float32)
+            bounded_image = torch.tensor(bounded_image, dtype=torch.float32)
+            bounded_image = bounded_image.unsqueeze(0)
+            images.append(bounded_image)
+
+        images = torch.tensor(np.array(images), dtype=torch.float32)
+        pred = self.net(images)
+
+        pred_class = torch.argmax(pred, dim=1)
+
+        for pred_class, bound_and_con in zip(pred_class, bounds):
+            bound, con = bound_and_con
+            x,y,w,h = bound
+
+            shape = "Unknown"
+            if pred_class == 0:
+                shape = "T Shape"
+            elif pred_class == 1:
+                shape = "L Shape"
+            elif pred_class == 2:
+                shape = "Z Shape"
+            print(f"\tFound shape {shape}")
+
+            cv2.rectangle(draw, (x, y), (x + w, y + h), color=(0, 255, 0))
+            cv2.drawContours(draw, [con], -1, (255, 255, 255), 2)
+            cv2.putText(draw, shape, (x, y - 16), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
+
+        cv2.imshow("Hello", draw)
+
+    def camera(self, c):
+        self.net.eval()
+        print(f"Opening camera {c}")
+        camera.open_camera("local", lambda image, w, h: self.run_model_on_image(image), c)
+
     def __del__(self):
-        self.connection.commit()
-        self.connection.close()
+        if self.connection is not None:
+            self.connection.commit()
+            self.connection.close()
 
 
 def main():
@@ -171,6 +226,13 @@ def main():
     tester.add_argument("--batch-size", '-b', dest='b', type=int, default=4096, help="Batch size")
     tester.add_argument("-d", action='store_true', default=False, help="Use the normal database instead of the deep learning one")
 
+    camera_parser = subparser.add_parser("camera", help="Test using input from a camera")
+    camera_parser.add_argument("model", help="Model file to store the network")
+    camera_parser.add_argument("--database", dest="database", default=None, required=False, help="Unused")
+    camera_parser.add_argument("--batch-size", '-b', dest='b', type=int, default=4096, help="Unused")
+    camera_parser.add_argument("-d", action='store_true', default=False, help="Unused")
+    camera_parser.add_argument('-c', action='store', default=0, help="Camera to use")
+
     args = parser.parse_args()
 
     network = Network(args.model, args.database, args.b, args.d)
@@ -179,6 +241,8 @@ def main():
         network.train(args.epochs)
     elif args.mode == "test":
         network.test(args.t)
+    elif args.mode == "camera":
+        network.camera(args.c)
 
 
 if __name__ == "__main__":

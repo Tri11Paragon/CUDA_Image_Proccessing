@@ -333,6 +333,25 @@ def deep_generate(args):
     connection.commit()
     connection.close()
 
+def build_database(args):
+    resource_dir = Path(args.resource_directory)
+    connection = sqlite3.connect(args.database_path)
+    cursor = connection.cursor()
+
+    files = list(resource_dir.iterdir())
+    i = 0
+    insert_data = []
+    while i < len(files):
+        file = files[i]
+        i += 1
+        if file.is_dir():
+            files.extend(list(Path(file.resolve()).iterdir()))
+            continue
+        insert_data.append(())
+
+    connection.commit()
+    connection.close()
+
 
 def main():
     parser = argparse.ArgumentParser(description="Preprocess images for use in the neural network")
@@ -368,6 +387,10 @@ def main():
     update_parser = subparsers.add_parser("update", help="Update images within the database")
     update_parser.add_argument("database", help="Database with image information in it (this will be copied)")
 
+    build_parser = subparsers.add_parser("build", help="Build an image database from a folder")
+    build_parser.add_argument("resource_directory")
+    build_parser.add_argument("database_path")
+
     args = parser.parse_args()
 
     if args.mode == "generate":
@@ -378,6 +401,8 @@ def main():
         deep_generate(args)
     if args.mode == "update":
         update_all_images(args)
+    if args.mode == "build":
+        build_database(args)
 
 if __name__ == "__main__":
     main()

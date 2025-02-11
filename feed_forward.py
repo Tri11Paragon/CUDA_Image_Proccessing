@@ -1,18 +1,12 @@
 import math
-import os
 import cv2
 import argparse
 import numpy as np
-import datetime
 import camera
 import process
-import basic_classify as c
-import image_preprocessor as ip
 from pathlib import Path
 import pickle
 import sqlite3
-import random
-import shutil
 import torch
 import torch.nn as nn
 import torch.optim as optim
