@@ -19,6 +19,7 @@ import torch.optim as optim
 from collections import deque
 from sklearn.model_selection import train_test_split
 from torch.utils.data import TensorDataset, DataLoader
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 MAX_POINTS = 512
 IMAGE_SIZE = 24
@@ -218,6 +219,7 @@ def train(args):
     criterion_class_shape = nn.CrossEntropyLoss()
     criterion_class_color = nn.CrossEntropyLoss()
     optimizer_shape = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
+    scheduler = ReduceLROnPlateau(optimizer_shape, mode='min', patience=10, factor=0.5, verbose=True)
     # optimizer_shape = optim.SGD(model.parameters(), lr=0.001, momentum=0.9, weight_decay=5e-4)
     optimizer_color = optim.SGD(model.parameters(), lr=0.001, momentum=0.9, weight_decay=5e-4)
 
@@ -225,6 +227,8 @@ def train(args):
 
     should_exit = False
     for epoch in range(args.e):
+        if args.s and optimizer_shape.param_groups[0]['lr'] < 1e-6:
+            break
         average_loss_shape = 0
         average_loss_color = 0
         try:
@@ -247,6 +251,7 @@ def train(args):
                 runs += 1
 
                 if args.s:
+                    scheduler.step(class_loss)
                     class_loss.backward()
                     optimizer_shape.step()
                 if args.c:

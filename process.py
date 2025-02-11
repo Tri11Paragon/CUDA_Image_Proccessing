@@ -50,17 +50,10 @@ def quantize_image(image, approved_colors_hsv):
     return cv2.cvtColor(new_pixels_hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
 
 
-def fit_centerline(contour, num_points=100):
-    """Fits a smooth centerline through the contour."""
-    # Convert contour to NumPy array
-    contour = contour[:, 0, :]  # Reshape to (N,2)
+def find_corners(image, maxCorners = 100, qualityLevel=0.01, minDistance=10):
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    return cv2.goodFeaturesToTrack(gray, maxCorners=maxCorners, qualityLevel=qualityLevel, minDistance=minDistance)
 
-    # Fit a spline curve
-    tck, _ = splprep([contour[:, 0], contour[:, 1]], s=5)  # s=5 smooths the curve
-    u = np.linspace(0, 1, num_points)  # Generate equally spaced points
-    smooth_points = np.array(splev(u, tck)).T  # Evaluate spline
-
-    return smooth_points.astype(np.int32)
 
 def threshold_image(image):
     scale = (256 / 100)
