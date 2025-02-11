@@ -48,13 +48,13 @@ def preprocess_contour(contour):
     return padded, num_points
 
 
-def preprocess_bounds(image, x, y, w, h):
+def extract_image_from_bounds(image, x, y, w, h, max_size = IMAGE_SIZE):
     cx, cy = x + w // 2, y + h // 2
 
-    x1 = max(cx - math.floor(IMAGE_SIZE / 2), 0)
-    y1 = max(cy - math.floor(IMAGE_SIZE / 2), 0)
-    x2 = min(cx + math.ceil(IMAGE_SIZE / 2), image.shape[1])
-    y2 = min(cy + math.ceil(IMAGE_SIZE / 2), image.shape[0])
+    x1 = max(cx - math.floor(max_size / 2), 0)
+    y1 = max(cy - math.floor(max_size / 2), 0)
+    x2 = min(cx + math.ceil(max_size / 2), image.shape[1])
+    y2 = min(cy + math.ceil(max_size / 2), image.shape[0])
 
     cropped_region = image[y1:y2, x1:x2]
 
@@ -69,18 +69,21 @@ def preprocess_bounds(image, x, y, w, h):
             value=(0, 0, 0)  # Black padding
         )
 
-    return np.array(cropped_region, dtype=np.float32).flatten() / 255.0
+    return cropped_region
 
-def get_shape_class_from_filename(path):
-    parts = path.split('_')
-    t = parts[2]
+def preprocess_bounds(image, x, y, w, h, max_size = IMAGE_SIZE):
+    return np.array(extract_image_from_bounds(image, x, y, w, h, max_size), dtype=np.float32).flatten() / 255.0
+
+def get_shape_class_from_filename(path, pos = 2):
+    parts = Path(path).stem.split('_')
+    t = parts[pos]
     if t == 't':
         return 0
     elif t == 'l':
         return 1
     elif t == 'z':
         return 2
-    return 0
+    return -1
 
 def get_color_class_from_filename(path):
     parts = path.split('_')
@@ -145,12 +148,6 @@ class ContourClassifier(nn.Module):
     def __init__(self, input_size, image_size):
         super().__init__()
         print(input_size, image_size)
-        # self.class_begin = nn.Sequential(
-        #     nn.Linear(input_size, 1024),
-        #     nn.ReLU(),
-        #     nn.Linear(1024, 32),
-        # )
-        # self.attention = nn.MultiheadAttention(embed_dim=32, num_heads=8, batch_first=True)
         self.classifier = nn.Sequential(
             nn.Sequential(
                 nn.Linear(input_size, 128),
@@ -219,7 +216,7 @@ def train(args):
     criterion_class_shape = nn.CrossEntropyLoss()
     criterion_class_color = nn.CrossEntropyLoss()
     optimizer_shape = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
-    scheduler = ReduceLROnPlateau(optimizer_shape, mode='min', patience=20, factor=0.5, verbose=True)
+    scheduler = ReduceLROnPlateau(optimizer_shape, mode='min', patience=200, factor=0.5)
     # optimizer_shape = optim.SGD(model.parameters(), lr=0.001, momentum=0.9, weight_decay=5e-4)
     optimizer_color = optim.SGD(model.parameters(), lr=0.001, momentum=0.9, weight_decay=5e-4)
 
@@ -228,7 +225,7 @@ def train(args):
     should_exit = False
     for epoch in range(args.e):
         if args.s and scheduler.get_last_lr()[0] < 1e-6:
-            print("Early exit!")
+            print(f"Early exit with learn rate of {scheduler.get_last_lr()[0]}")
             break
         average_loss_shape = 0
         average_loss_color = 0
