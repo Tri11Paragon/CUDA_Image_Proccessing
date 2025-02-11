@@ -111,7 +111,6 @@ class Network:
                     self.optimizer.step()
 
                     index = end_index
-                    print(f"Ran mini-batch with loss: {loss.item()}")
 
                 self.scheduler.step(average_loss)
                 print(f"Average loss for epoch {epoch} was {average_loss / runs}")
