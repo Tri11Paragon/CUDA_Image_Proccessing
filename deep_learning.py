@@ -35,7 +35,7 @@ class CNNShapeNetwork(nn.Module):
         return x
 
 class Network:
-    def __init__(self, model_file, database_path, batch_size = 4096):
+    def __init__(self, model_file, database_path, batch_size = 4096, image_type = False):
         self.model_file = model_file
         if Path(model_file).exists():
             self.net = torch.load(model_file)
@@ -50,21 +50,30 @@ class Network:
         self.batch_size = batch_size
         self.batch_images = np.empty((batch_size, NETWORK_INPUT_SIZE, NETWORK_INPUT_SIZE), dtype=np.float32)
         self.batch_class = np.empty((batch_size,), dtype=np.longlong)
+        self.image_type = image_type
 
 
     def load_images(self):
         print("Loading new image batch")
-        self.cursor.execute(
-            "SELECT i.filename, i2.filename, b.x, b.y, b.width, b.height FROM extra_images i INNER JOIN images i2 ON i2.id = i.image_id" +
-            " INNER JOIN bounds b ON i.image_id = b.image_id ORDER BY RANDOM() LIMIT ?", (self.batch_size,))
+        if self.image_type:
+            self.cursor.execute(
+                "SELECT i.filename, b.x, b.y, b.width, b.height FROM images i" +
+                " INNER JOIN bounds b ON i.id = b.image_id ORDER BY RANDOM() LIMIT ?", (self.batch_size,))
+        else:
+            self.cursor.execute(
+                "SELECT i.filename, i2.filename, b.x, b.y, b.width, b.height FROM extra_images i INNER JOIN images i2 ON i2.id = i.image_id" +
+                " INNER JOIN bounds b ON i.image_id = b.image_id ORDER BY RANDOM() LIMIT ?", (self.batch_size,))
         data = self.cursor.fetchall()
 
         for i, image_data in enumerate(data):
-            extra_filename, base_filename, x, y, w, h = image_data
+            if self.image_type:
+                base_filename, x, y, w, h = image_data
+            else:
+                extra_filename, base_filename, x, y, w, h = image_data
 
             filename = base_filename
-            if np.random.randint(0, 2) == 0:
-                if Path(extra_filename).exists():
+            if not self.image_type:
+                if np.random.randint(0, 2) == 0 and Path(extra_filename).exists():
                     filename = extra_filename
 
             image = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
@@ -112,6 +121,31 @@ class Network:
         torch.save(self.net, self.model_file)
         print(f"Saved model as {self.model_file}")
 
+    def test(self, test_size = 4096):
+        self.net.eval()
+        correct = 0
+        incorrect = 0
+        while test_size > 0:
+            self.load_images()
+            images = torch.tensor(self.batch_images[:min(test_size, self.batch_size)], dtype=torch.float32)
+            images = images.unsqueeze(1)
+            classes = torch.tensor(self.batch_class[:min(test_size, self.batch_size)], dtype=torch.long)
+
+            pred = self.net(images)
+
+            pred_class = torch.argmax(pred, dim=1)
+
+            for pred, actual in zip(pred_class, classes):
+                if pred == actual:
+                    correct += 1
+                else:
+                    incorrect += 1
+
+            test_size -= self.batch_size
+
+        print(f"Correct: {correct} / Incorrect: {incorrect}")
+        print(f"Test set accuracy: {correct / test_size}")
+
     def __del__(self):
         self.connection.commit()
         self.connection.close()
@@ -127,13 +161,24 @@ def main():
     trainer.add_argument("database", help="Database with image data in it")
     trainer.add_argument("model", help="Model file to store the network")
     trainer.add_argument("--epochs", "-e", type=int, default=10000, help="Number of epochs to train")
+    trainer.add_argument("--batch-size", '-b', dest='b', type=int, default=4096, help="Batch size")
+    trainer.add_argument("-d", type='store_true', default=False, help="Use the normal database instead of the deep learning one")
+
+    tester = subparser.add_parser("test", help="Test the network")
+    tester.add_argument("database", help="Database with image data in it")
+    tester.add_argument("model", help="Model file to store the network")
+    tester.add_argument("--test-size", '-t', dest='t', type=int, default=4096, help="Number of images to test")
+    tester.add_argument("--batch-size", '-b', dest='b', type=int, default=4096, help="Batch size")
+    tester.add_argument("-d", type='store_true', default=False, help="Use the normal database instead of the deep learning one")
 
     args = parser.parse_args()
 
-    network = Network(args.model, args.database)
+    network = Network(args.model, args.database, args.b, args.d)
 
     if args.mode == "train":
         network.train(args.epochs)
+    elif args.mode == "test":
+        network.test(args.t)
 
 
 if __name__ == "__main__":
