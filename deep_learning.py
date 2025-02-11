@@ -78,9 +78,9 @@ class Network:
     def train(self, epochs, batch_process = 16):
         self.net.train()
         for epoch in range(epochs):
-            self.load_images()
-            print(f"Begin epoch {epoch}")
             try:
+                self.load_images()
+                print(f"Begin epoch {epoch}")
                 runs = 0
                 average_loss = 0
                 index = 0
