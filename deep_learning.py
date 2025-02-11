@@ -23,7 +23,7 @@ class CNNShapeNetwork(nn.Module):
         self.conv1 = nn.Conv2d(1, 16, (5, 5))
         self.pool = nn.MaxPool2d((2, 2), (2, 2))
         self.conv2 = nn.Conv2d(16, 32, (5, 5))
-        self.fc1 = nn.Linear(2704, 128)
+        self.fc1 = nn.Linear(26912, 128)
         self.fc2 = nn.Linear(128, 84)
         self.fc3 = nn.Linear(84, ff.CLASSES)
 
