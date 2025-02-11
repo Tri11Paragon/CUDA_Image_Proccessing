@@ -15,14 +15,14 @@ import feed_forward as ff
 import camera
 import process
 
-NETWORK_INPUT_SIZE = 64
+NETWORK_INPUT_SIZE = 128
 
 class CNNShapeNetwork(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 6, (5, 5))
+        self.conv1 = nn.Conv2d(1, 16, (5, 5))
         self.pool = nn.MaxPool2d((2, 2), (2, 2))
-        self.conv2 = nn.Conv2d(6, 16, (5, 5))
+        self.conv2 = nn.Conv2d(16, 32, (5, 5))
         self.fc1 = nn.Linear(2704, 128)
         self.fc2 = nn.Linear(128, 84)
         self.fc3 = nn.Linear(84, ff.CLASSES)
@@ -155,7 +155,8 @@ class Network:
     def run_model_on_image(self, image):
         if image is None:
             return
-        bounds = process.find_bounds_and_contours(cv2.cvtColor(process.threshold_image(image.copy()), cv2.COLOR_BGR2GRAY))
+        thresh = process.threshold_image(image.copy())
+        bounds = process.find_bounds_and_contours(cv2.cvtColor(thresh, cv2.COLOR_BGR2GRAY))
         if len(bounds) == 0:
             cv2.imshow("Hello", image)
             return
@@ -193,7 +194,7 @@ class Network:
             cv2.drawContours(draw, [con], -1, (255, 255, 255), 2)
             cv2.putText(draw, shape, (x, y - 16), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
 
-        cv2.imshow("Hello", draw)
+        cv2.imshow("Hello", cv2.hconcat(draw, thresh))
 
     def camera(self, c):
         self.net.eval()
