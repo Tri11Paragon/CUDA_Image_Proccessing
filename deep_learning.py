@@ -126,6 +126,7 @@ class Network:
         incorrect = 0
         while test_size > 0:
             self.load_images()
+            print(f"Begin testing phase, images remaining: {test_size}")
             images = torch.tensor(self.batch_images[:min(test_size, self.batch_size)], dtype=torch.float32)
             images = images.unsqueeze(1)
             classes = torch.tensor(self.batch_class[:min(test_size, self.batch_size)], dtype=torch.long)
