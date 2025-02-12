@@ -1,0 +1,3 @@
+[submodule "dlib-cnn/lib/blt"]
+	path = dlib-cnn/lib/blt
+	url = https://github.com/Tri11Paragon/blt
