@@ -28,7 +28,7 @@ macro(compile_options target_name)
     sanitizers(${target_name})
 endmacro()
 
-macro(blt_add_project name source type)
+macro(blt_add_test name source type)
 
     project(${name}-${type})
 
@@ -65,6 +65,10 @@ add_subdirectory(lib/blt)
 add_compile_options("-fopenmp")
 add_link_options("-fopenmp")
 
+find_package(OpenCV REQUIRED)
+
+include_directories( ${OpenCV_INCLUDE_DIRS} )
+
 fetchcontent_declare(dlib
         URL http://dlib.net/files/dlib-19.24.tar.bz2
         URL_HASH MD5=8a98957a73eebd3cd7431c2bac79665f
@@ -78,7 +82,7 @@ add_executable(dlib-cnn ${PROJECT_BUILD_FILES})
 
 compile_options(dlib-cnn)
 
-target_link_libraries(dlib-cnn PRIVATE BLT dlib)
+target_link_libraries(dlib-cnn PRIVATE BLT dlib ${OpenCV_LIBS})
 
 if (${BUILD_DLIB_CNN_EXAMPLES})
 
