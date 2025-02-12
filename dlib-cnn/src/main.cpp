@@ -1,6 +1,6 @@
 #include <dlib/dnn.h>
 #include <iostream>
-#include <blt/parse/argparse.h>
+#include <blt/parse/argparse_v2.h>
 #include <blt/std/logging.h>
 #include <dlib/data_io.h>
 #include <dlib/image_transforms.h>
@@ -68,9 +68,9 @@ auto create_test_network()
 
 int main(int argc, const char* argv[])
 {
-    auto parser = blt::arg_parse{};
-    parser.addArgument(blt::arg_builder{"model_path"}.setHelp("Model file location").build());
-    parser.addArgument(blt::arg_builder{"image_path"}.setHelp("Path to images - all images inside any subdirectory (recursive) will be considered").build());
-
+    // auto parser = blt::arg_parse{};
+    // parser.addArgument(blt::arg_builder{"model_path"}.setHelp("Model file location").build());
+    // parser.addArgument(blt::arg_builder{"image_path"}.setHelp("Path to images - all images inside any subdirectory (recursive) will be considered").build());
+    blt::argparse::detail::test();
 
 }
