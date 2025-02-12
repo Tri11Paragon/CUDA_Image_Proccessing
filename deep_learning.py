@@ -14,8 +14,11 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import feed_forward as ff
 import camera
 import process
+import perf
 
 NETWORK_INPUT_SIZE = 128
+
+profiler = perf.PerfCounter()
 
 class CNNShapeNetwork(nn.Module):
     def __init__(self):
@@ -61,6 +64,7 @@ class Network:
 
     def load_images(self):
         print("Loading new image batch")
+        event = profiler.start("Database Execute")
         if self.image_type:
             self.cursor.execute(
                 "SELECT i.filename, b.x, b.y, b.width, b.height FROM images i" +
@@ -69,8 +73,12 @@ class Network:
             self.cursor.execute(
                 "SELECT i.filename, i2.filename, b.x, b.y, b.width, b.height FROM extra_images i INNER JOIN images i2 ON i2.id = i.image_id" +
                 " INNER JOIN bounds b ON i.image_id = b.image_id ORDER BY RANDOM() LIMIT ?", (self.batch_size,))
+        event.end()
+        event = profiler.start("Database Fetchall")
         data = self.cursor.fetchall()
+        event.end()
 
+        event = profiler.start("Load Images from Database")
         for i, image_data in enumerate(data):
             if self.image_type:
                 base_filename, x, y, w, h = image_data
@@ -82,17 +90,25 @@ class Network:
                 if np.random.randint(0, 2) == 0 and Path(extra_filename).exists():
                     filename = extra_filename
 
+            event2 = profiler.start("Image Load")
             image = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
+            event2.end()
+            event2 = profiler.start("Bounds Extract")
             image = ff.extract_image_from_bounds(image, x, y, w, h, max_size=4096)
+            event2.end()
+            event2 = profiler.start("Image Resize")
             image = cv2.resize(image, (NETWORK_INPUT_SIZE, NETWORK_INPUT_SIZE), interpolation=cv2.INTER_AREA).astype(np.float32)
 
             self.batch_images[i] = image
             self.batch_class[i] = ff.get_shape_class_from_filename(filename)
+            event2.end()
+        event.end()
         print("Loading of images complete")
 
     def train(self, epochs, batch_process = 16):
         self.net.train()
         for epoch in range(epochs):
+            event = profiler.start("Epoch")
             try:
                 self.load_images()
                 print(f"Begin epoch {epoch}")
@@ -122,6 +138,7 @@ class Network:
                 print(f"Average loss for epoch {epoch} was {average_loss / runs}")
             except KeyboardInterrupt:
                 break
+            event.end()
 
         torch.save(self.net, self.model_file)
         print(f"Saved model as {self.model_file}")
@@ -244,6 +261,8 @@ def main():
         network.test(args.t)
     elif args.mode == "camera":
         network.camera(args.c)
+
+    profiler.print_profiles()
 
 
 if __name__ == "__main__":
