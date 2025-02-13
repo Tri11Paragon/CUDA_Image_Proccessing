@@ -56,24 +56,40 @@ def find_corners(image, maxCorners = 100, qualityLevel=0.01, minDistance=10):
 
 
 def threshold_image(image):
-    scale = (256 / 100)
-    approved_colors = [
-        (15, 80 * scale, 80 * scale),  # Orangeish
-        (212, 27 * scale, 17 * scale),  # Greenish
-        (200, 10 * scale, 27 * scale),  # Grayish
-        (150, 2 * scale, 70 * scale)  # Background
-    ]
+    # scale = (256 / 100)
+    # approved_colors = [
+    #     (15, 80 * scale, 80 * scale),  # Orangeish
+    #     (212, 27 * scale, 17 * scale),  # Greenish
+    #     (200, 10 * scale, 27 * scale),  # Grayish
+    #     (150, 2 * scale, 70 * scale)  # Background
+    # ]
+    #
+    # normalized = normalize_hsv_value(image)
+    # blur = cv2.blur(normalized, (10, 10))
+    # quantized = normalize_hsv_value(quantize_image(blur, approved_colors))
+    #
+    # gray = cv2.cvtColor(quantized, cv2.COLOR_BGR2GRAY)
+    #
+    # edges = cv2.Canny(gray, 50, 100)
+    # contour = draw_contours(cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR), thickness = 5)
+    # edges = cv2.Canny(cv2.cvtColor(contour, cv2.COLOR_BGR2GRAY), 50, 100)
+    #
+    # colored = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+    #
+    # return colored
+    size = 5
+    kernel = np.ones((size, size), np.uint8)
 
-    normalized = normalize_hsv_value(image)
-    blur = cv2.blur(normalized, (10, 10))
-    quantized = normalize_hsv_value(quantize_image(blur, approved_colors))
+    saturated = image.copy()
+    saturated = modify_hsv(saturated, lambda h, s, v: (h, s, v * 1.9))
+    saturated = modify_hsv(saturated, lambda h, s, v: (h, s, v / 1.9))
+    saturated = modify_hsv(saturated, lambda h, s, v: ((h + 30) % 180, s, v))
+    saturated = modify_hsv(saturated, lambda h, s, v: ((h + 90) % 180, s * 0.5, v * 2.5))
 
-    gray = cv2.cvtColor(quantized, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(saturated, cv2.COLOR_BGR2GRAY)
 
     edges = cv2.Canny(gray, 50, 100)
-    contour = draw_contours(cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR), thickness = 5)
-    edges = cv2.Canny(cv2.cvtColor(contour, cv2.COLOR_BGR2GRAY), 50, 100)
-
+    edges = cv2.dilate(edges, kernel)
     colored = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
 
     return colored

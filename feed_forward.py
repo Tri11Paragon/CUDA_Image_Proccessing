@@ -79,6 +79,16 @@ def get_shape_class_from_filename(path, pos = 2):
         return 2
     return -1
 
+def get_string_from_class(c):
+    if c == 0:
+        return "T Shape"
+    elif c == 1:
+        return "L Shape"
+    elif c == 2:
+        return "Z Shape"
+    else:
+        return "Unknown"
+
 def get_color_class_from_filename(path):
     parts = path.split('_')
     color = parts[1]
@@ -89,6 +99,16 @@ def get_color_class_from_filename(path):
     elif color == "orange":
         return 2
     return 0
+
+def get_string_from_color(color):
+    if color == 0:
+        return "Grey"
+    elif color == 1:
+        return "Green"
+    elif color == 2:
+        return "Orange"
+    else:
+        return "Unknown"
 
 def load_data_from_db(args):
     print("Loading data from database...")
@@ -180,6 +200,9 @@ class ContourClassifier(nn.Module):
         # data = self.class_begin(x[0])
         # atten, _ = self.attention(data, data, data)
         return self.classifier(x[0]), self.color_predictor(x[1])
+
+def load_model(model_file):
+    return torch.load(model_file, weights_only=False)
 
 
 def train(args):
@@ -322,10 +345,6 @@ def use(args):
 
             predicted_classes = torch.argmax(class_pred, dim=1)
             predicted_color = torch.argmax(color_pred, dim=1)
-
-            print(class_pred)
-            print(batch_Y_shape)
-            print(predicted_classes)
 
             for pred_shape, pred_color, shape_label, color_label in zip(predicted_classes, predicted_color, batch_Y_shape, batch_Y_color):
                 if pred_shape == shape_label:
