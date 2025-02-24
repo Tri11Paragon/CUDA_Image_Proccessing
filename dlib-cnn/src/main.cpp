@@ -71,6 +71,11 @@ int main(int argc, const char* argv[])
     // auto parser = blt::arg_parse{};
     // parser.addArgument(blt::arg_builder{"model_path"}.setHelp("Model file location").build());
     // parser.addArgument(blt::arg_builder{"image_path"}.setHelp("Path to images - all images inside any subdirectory (recursive) will be considered").build());
+    blt::argparse::argument_parser_t parser;
+    parser.with_help();
+    parser.add_positional("model_path");
+    parser.add_positional("image_path");
+
     blt::argparse::detail::test();
 
 }
