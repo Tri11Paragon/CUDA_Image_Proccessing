@@ -66,16 +66,43 @@ auto create_test_network()
 
 }
 
+void test(int argc, const char* argv[])
+{
+    using namespace blt::argparse;
+    argument_parser_t parser;
+    parser.with_help();
+
+    parser.add_flag("-a").set_action(action_t::STORE_TRUE).set_help("This is a really long test string which should create a multi-line condition");
+    parser.add_flag("--deep").set_action(action_t::STORE_FALSE);
+    parser.add_flag("-b", "--combined").set_action(action_t::STORE_CONST).set_const(50);
+    parser.add_flag("--append").set_action(action_t::APPEND).as_type<int>();
+    parser.add_flag("--required").set_required(true);
+    parser.add_flag("--default").set_default("I am a default value");
+    parser.add_flag("-t").set_action(action_t::APPEND_CONST).set_dest("test").set_const(5);
+    parser.add_flag("-g").set_action(action_t::APPEND_CONST).set_dest("test").set_const(10);
+    parser.add_flag("-e").set_action(action_t::APPEND_CONST).set_dest("test").set_const(15);
+    parser.add_flag("-f").set_action(action_t::APPEND_CONST).set_dest("test").set_const(20);
+    parser.add_flag("-d").set_action(action_t::APPEND_CONST).set_dest("test").set_const(25);
+    parser.add_flag("--end").set_action(action_t::EXTEND).set_dest("wow").as_type<float>();
+
+    auto args = parser.parse(argc, argv);
+}
+
 int main(int argc, const char* argv[])
 {
+    test(argc, argv);
     // auto parser = blt::arg_parse{};
     // parser.addArgument(blt::arg_builder{"model_path"}.setHelp("Model file location").build());
     // parser.addArgument(blt::arg_builder{"image_path"}.setHelp("Path to images - all images inside any subdirectory (recursive) will be considered").build());
     blt::argparse::argument_parser_t parser;
     parser.with_help();
+    parser.add_flag("--test").set_flag();
     parser.add_positional("model_path");
     parser.add_positional("image_path");
 
-    blt::argparse::detail::test();
+    auto args = parser.parse(argc, argv);
+
+    if (args.contains("--test"))
+        blt::argparse::detail::test();
 
 }
