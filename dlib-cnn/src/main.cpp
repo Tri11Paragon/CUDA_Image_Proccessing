@@ -76,7 +76,7 @@ void test(int argc, const char* argv[])
     parser.add_flag("--deep").set_action(action_t::STORE_FALSE);
     parser.add_flag("-b", "--combined").set_action(action_t::STORE_CONST).set_const(50);
     parser.add_flag("--append").set_action(action_t::APPEND).as_type<int>();
-    parser.add_flag("--store_choice").set_action(action_t::STORE).as_type<int>().set_choices(1,2,3,4,5);
+    parser.add_flag("--store_choice").set_action(action_t::STORE).as_type<int>().set_choices(1,2,3,4,5).set_metavar("CHOICE");
     parser.add_flag("--required").set_required(true);
     parser.add_flag("--default").set_default("I am a default value");
     parser.add_flag("-t").set_action(action_t::APPEND_CONST).set_dest("test").set_const(5);
