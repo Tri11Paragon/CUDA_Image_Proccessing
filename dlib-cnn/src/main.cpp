@@ -92,19 +92,36 @@ void test(int argc, const char* argv[])
 
 int main(int argc, const char* argv[])
 {
-    test(argc, argv);
+    // test(argc, argv);
     // auto parser = blt::arg_parse{};
     // parser.addArgument(blt::arg_builder{"model_path"}.setHelp("Model file location").build());
     // parser.addArgument(blt::arg_builder{"image_path"}.setHelp("Path to images - all images inside any subdirectory (recursive) will be considered").build());
     blt::argparse::argument_parser_t parser;
     parser.with_help();
-    parser.add_flag("--test").set_flag();
-    parser.add_positional("model_path");
-    parser.add_positional("image_path");
+    const auto subparser = parser.add_subparser("mode");
+
+    const auto test_mode = subparser->add_parser("test");
+
+    test_mode->add_flag("--test").make_flag();
+
+    const auto train_mode = subparser->add_parser("train");
+    train_mode->add_positional("model_path");
+    train_mode->add_positional("image_path");
 
     auto args = parser.parse(argc, argv);
 
-    if (args.contains("--test"))
-        blt::argparse::detail::test();
+    if (args.get("mode") == "test")
+    {
+        if (args.get<bool>("--test"))
+            blt::argparse::detail::test();
+        else
+        {
+            const char* arg[] = {"./program", "--help"};
+            test(2, arg);
+        }
+    } else if (args.get("mode") == "train")
+    {
+
+    }
 
 }
