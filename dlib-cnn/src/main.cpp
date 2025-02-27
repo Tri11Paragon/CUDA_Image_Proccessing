@@ -102,6 +102,7 @@ int main(int argc, const char* argv[])
 
     const auto test_mode = subparser->add_parser("test");
 
+    test_mode->with_help();
     test_mode->add_flag("--test").make_flag();
 
     const auto train_mode = subparser->add_parser("train");
