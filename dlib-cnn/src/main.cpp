@@ -8,6 +8,7 @@
 #include <iterator>
 #include <thread>
 #include <nn/config.h>
+#include <blt/iterator/flatten.h>
 
 using namespace dlib;
 
@@ -92,6 +93,14 @@ void test(int argc, const char* argv[])
 
 int main(int argc, const char* argv[])
 {
+    std::vector<int> hello;
+    hello.push_back(1);
+    for (const auto [i, v] : blt::enumerate(hello))
+    {
+        std::cout << "Index: " << i << " is const? " << std::is_const_v<decltype(i)> << std::endl;
+        std::cout << "Value: " << v << " is const (remove ref)? " << std::is_const_v<std::remove_reference_t<decltype(v)>> << std::endl;
+    }
+
     // test(argc, argv);
     // auto parser = blt::arg_parse{};
     // parser.addArgument(blt::arg_builder{"model_path"}.setHelp("Model file location").build());
