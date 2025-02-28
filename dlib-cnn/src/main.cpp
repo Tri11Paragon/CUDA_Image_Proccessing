@@ -93,9 +93,13 @@ void test(int argc, const char* argv[])
 
 int main(int argc, const char* argv[])
 {
+
+    std::cout << blt::meta::is_tuple_like_v<std::tuple<int>> << std::endl;
+    std::cout << blt::meta::is_tuple_like_v<int> << std::endl;
+
     std::vector<std::pair<int, std::pair<int, std::tuple<int, float, std::string>>>> hello;
     hello.emplace_back(1, std::pair{5, std::make_tuple(10, 123.05f, "Hello World")});
-    for (const auto [i, v1, v2, v3, v4, v5] : blt::enumerate(hello).flatten())
+    for (const auto [i, v1, v2, v3, v4, v5] : blt::enumerate(hello).flatten_all().as_const())
     {
         std::cout << "Index: " << i << " is const? " << std::is_const_v<decltype(i)> << std::endl;
         std::cout << "Value: " << v1 << " " << v2 << " is const (remove ref)? " << std::is_const_v<std::remove_reference_t<decltype(v1)>> << std::endl;
