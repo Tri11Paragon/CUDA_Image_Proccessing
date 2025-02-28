@@ -91,25 +91,8 @@ void test(int argc, const char* argv[])
     auto args = parser.parse(argc, argv);
 }
 
-int main(int argc, const char* argv[])
+int main(const int argc, const char* argv[])
 {
-
-    std::cout << blt::meta::is_tuple_like_v<std::tuple<int>> << std::endl;
-    std::cout << blt::meta::is_tuple_like_v<int> << std::endl;
-
-    std::vector<std::pair<int, std::pair<int, std::tuple<int, float, std::string>>>> hello;
-    hello.emplace_back(1, std::pair{5, std::make_tuple(10, 123.05f, "Hello World")});
-    for (const auto [i, v1, v2, v3, v4, v5] : blt::enumerate(hello).flatten_all().as_const())
-    {
-        std::cout << "Index: " << i << " is const? " << std::is_const_v<decltype(i)> << std::endl;
-        std::cout << "Value: " << v1 << " " << v2 << " is const (remove ref)? " << std::is_const_v<std::remove_reference_t<decltype(v1)>> << std::endl;
-        std::cout << "Is value references? " << std::is_reference_v<decltype(v1)> << " | " << std::is_reference_v<decltype(v2)> << std::endl;
-    }
-
-    // test(argc, argv);
-    // auto parser = blt::arg_parse{};
-    // parser.addArgument(blt::arg_builder{"model_path"}.setHelp("Model file location").build());
-    // parser.addArgument(blt::arg_builder{"image_path"}.setHelp("Path to images - all images inside any subdirectory (recursive) will be considered").build());
     blt::argparse::argument_parser_t parser;
     parser.with_help();
     const auto subparser = parser.add_subparser("mode");
@@ -123,7 +106,7 @@ int main(int argc, const char* argv[])
     train_mode->add_positional("model_path");
     train_mode->add_positional("image_path");
 
-    auto args = parser.parse(argc, argv);
+    const auto args = parser.parse(argc, argv);
 
     if (args.get("mode") == "test")
     {
