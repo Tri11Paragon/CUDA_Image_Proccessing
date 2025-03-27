@@ -353,6 +353,18 @@ def build_database(args):
     connection.close()
 
 
+def convert_database(args):
+    database_path = Path(args.database_path)
+    connection = sqlite3.connect(database_path)
+    cursor = connection.cursor()
+    cursor.execute("SELECT i.filename,i.original_file,b.x,b.y,b.width,b.height FROM images i, bounds b WHERE i.id == b.image_id")
+
+    with open(args.file_path, "w") as f:
+        for file, orig, x, y, w, h in cursor.fetchall():
+            f.write(f"{file},{orig},{x},{y},{w},{h}\n")
+    connection.close()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Preprocess images for use in the neural network")
     subparsers = parser.add_subparsers(dest='mode', required=True)
@@ -391,6 +403,10 @@ def main():
     build_parser.add_argument("resource_directory")
     build_parser.add_argument("database_path")
 
+    to_file = subparsers.add_parser("convert", help="Convert image database into bounds file")
+    to_file.add_argument("database_path")
+    to_file.add_argument("file_path")
+
     args = parser.parse_args()
 
     if args.mode == "generate":
@@ -403,6 +419,8 @@ def main():
         update_all_images(args)
     if args.mode == "build":
         build_database(args)
+    if args.mode == "convert":
+        convert_database(args)
 
 if __name__ == "__main__":
     main()
