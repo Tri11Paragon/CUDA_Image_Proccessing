@@ -55,7 +55,6 @@ using anet_type = loss_multiclass_log<fc<3,avg_pool_everything<
                             input_rgb_image_sized<227>
                             >>>>>>>>>>>;
 
-
 auto create_training_network()
 {
 
