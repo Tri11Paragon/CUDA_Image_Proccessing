@@ -66,6 +66,8 @@ static_positions = {
     "s2_2": home_positions,
 }
 
+board_state = [["" for _ in range(3)] for _ in range(3)]
+
 class SerialController:
     def __init__(self, serial_port):
         try:
@@ -133,12 +135,12 @@ class UserInterface:
         self.tic_tac_toe_canvas.pack()
 
         # Draw grid lines
-        offset = 25
-        self.cell_size = (tick_width - offset) / 3
+        self.offset = 25
+        self.cell_size = (tick_width - self.offset) / 3
         cell_size = self.cell_size
         for i in range(1, 3):
-            self.tic_tac_toe_canvas.create_line(i * cell_size, offset, i * cell_size, tick_height - offset, width=2)
-            self.tic_tac_toe_canvas.create_line(offset, i * cell_size, tick_width - offset, i * cell_size, width=2)
+            self.tic_tac_toe_canvas.create_line(i * cell_size, self.offset, i * cell_size, tick_height - self.offset, width=2)
+            self.tic_tac_toe_canvas.create_line(self.offset, i * cell_size, tick_width - self.offset, i * cell_size, width=2)
 
         self.control_frame = tk.Frame(self.root, padx=200, pady=150)
         self.control_frame.grid(row=1, column=1, sticky="se")
@@ -191,6 +193,10 @@ class UserInterface:
             coords = self.canvas.coords(self.highlight)
             self.canvas.coords(self.selection, coords[0], coords[1], coords[2], coords[3])
             self.update_values()
+
+    def on_tic_tac_toe_click(self, event):
+        row, col = (self.offset + event.y) // self.cell_size, (self.offset + event.x) // self.cell_size
+
 
     def increase_value(self, event=None):
         current_positions[self.selected_joint] = current_positions[self.selected_joint] + self.increment_amount
