@@ -1,6 +1,7 @@
 import serial
 import tkinter as tk
 from PIL import Image, ImageTk
+import random
 
 def uppercase_char_in_string(s, index):
     if index < 0 or index >= len(s):
@@ -62,6 +63,7 @@ class SerialController:
 
 class UserInterface:
     def __init__(self, serial_port, increment_amount = 10):
+        self.current_joint_index = 0
         self.increment_amount = increment_amount
         self.serial = SerialController(serial_port)
         self.root = tk.Tk()
@@ -109,7 +111,7 @@ class UserInterface:
             self.tic_tac_toe_canvas.create_line(i * cell_size, offset, i * cell_size, tick_height - offset, width=2)
             self.tic_tac_toe_canvas.create_line(offset, i * cell_size, tick_width - offset, i * cell_size, width=2)
 
-        self.control_frame = tk.Frame(self.root)
+        self.control_frame = tk.Frame(self.root, padx=200, pady=150)
         self.control_frame.grid(row=1, column=1, sticky="se")
 
         self.selected_joint_label = tk.Label(self.control_frame, text="Selected Joint: Base", font=("Arial", 12))
@@ -126,6 +128,13 @@ class UserInterface:
 
         self.btn_update = tk.Button(self.control_frame, text="Update", font=("Arial", 14), command=self.send_positions)
         self.btn_update.pack(pady=10)
+
+        self.root.bind("<w>", self.increase_value)
+        self.root.bind("<s>", self.decrease_value)
+        self.root.bind("<a>", self.previous_joint)
+        self.root.bind("<d>", self.next_joint)
+        self.root.bind("<p>", self.print_positions)
+        self.root.bind("<Return>", self.send_positions)
 
         self.root.mainloop()
 
@@ -154,12 +163,22 @@ class UserInterface:
             self.canvas.coords(self.selection, coords[0], coords[1], coords[2], coords[3])
             self.update_values()
 
-    def increase_value(self):
+    def increase_value(self, event=None):
         current_positions[self.selected_joint] = current_positions[self.selected_joint] + self.increment_amount
         self.update_values()
 
-    def decrease_value(self):
+    def decrease_value(self, event=None):
         current_positions[self.selected_joint] = current_positions[self.selected_joint] - self.increment_amount
+        self.update_values()
+
+    def next_joint(self, event=None):
+        self.current_joint_index = (self.current_joint_index - 1) % len(fields)
+        self.selected_joint = list(current_positions.keys())[self.current_joint_index]
+        self.update_values()
+
+    def previous_joint(self, event=None):
+        self.current_joint_index = (self.current_joint_index + 1) % len(fields)
+        self.selected_joint = list(current_positions.keys())[self.current_joint_index]
         self.update_values()
 
     def update_values(self):
@@ -167,8 +186,17 @@ class UserInterface:
         label = uppercase_char_in_string(label, 0)
         self.selected_joint_label.config(text=f"Selected Joint: {label}")
         self.joint_value_label.config(text=f"{current_positions[self.selected_joint]}")
+        x, y = joint_positions[self.selected_joint]
+        self.canvas.coords(self.selection, x - 15, y - 15, x + 15, y + 15)
 
-    def send_positions(self):
+    def print_positions(self, event=None):
+        print("{")
+        for key, value in current_positions.items():
+            print(f"\t\"{key}\": {value}")
+        print("}")
+        print()
+
+    def send_positions(self, event=None):
         self.serial.write_positions(current_positions)
 
 
