@@ -37,6 +37,35 @@ home_positions = {
 
 current_positions = home_positions.copy()
 
+open_grip = 1000
+close_grip = 1000
+
+static_positions = {
+    "square": home_positions,
+    "depot": home_positions,
+    "c0": home_positions,
+    "c1": home_positions,
+    "c2": home_positions,
+    "c3": home_positions,
+    "x1": home_positions,
+    "x2": home_positions,
+    "x3": home_positions,
+    "x4": home_positions,
+    "o1": home_positions,
+    "o2": home_positions,
+    "o3": home_positions,
+    "o4": home_positions,
+    "s0_0": home_positions,
+    "s0_1": home_positions,
+    "s0_2": home_positions,
+    "s1_0": home_positions,
+    "s1_1": home_positions,
+    "s1_2": home_positions,
+    "s2_0": home_positions,
+    "s2_1": home_positions,
+    "s2_2": home_positions,
+}
+
 class SerialController:
     def __init__(self, serial_port):
         try:
@@ -196,9 +225,60 @@ class UserInterface:
         print("}")
         print()
 
-    def send_positions(self, event=None):
-        self.serial.write_positions(current_positions)
+    def open_grip(self, event=None):
+        current_positions["grip"] = open_grip
+        self.send_positions()
 
+    def close_grip(self, event=None):
+        current_positions["grip"] = close_grip
+        self.send_positions()
+
+    def home(self, event=None):
+        global current_positions
+        current_positions = home_positions.copy()
+        self.send_positions()
+
+    def square(self, event=None):
+        global current_positions
+        current_positions = static_positions["square"]
+        self.send_positions()
+
+    def depot(self, event=None):
+        global current_positions
+        current_positions = static_positions["depot"]
+        self.send_positions()
+
+    def piece_to_square(self, piece, square_x, square_y):
+        self.depot()
+        global current_positions
+        current_positions = static_positions[f"c{piece}"]
+        self.send_positions()
+        self.close_grip()
+        self.depot()
+        self.square()
+        current_positions = static_positions[f"s{square_x}_{square_y}"]
+        self.send_positions()
+        self.open_grip()
+        self.square()
+        self.home()
+
+    def square_to_piece(self, piece, square_x, square_y):
+        self.square()
+        global current_positions
+        current_positions = static_positions[f"s{square_x}_{square_y}"]
+        self.send_positions()
+        self.close_grip()
+        self.square()
+        self.depot()
+        current_positions = static_positions[f"c{piece}"]
+        self.send_positions()
+        self.open_grip()
+        self.depot()
+        self.home()
+
+    def send_positions(self, event=None):
+        self.update_values()
+        self.serial.write_positions(current_positions)
 
 def main():
     interface = UserInterface("COM1")
