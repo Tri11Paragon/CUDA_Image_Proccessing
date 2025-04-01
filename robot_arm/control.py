@@ -179,11 +179,24 @@ board_state = [["" for _ in range(3)] for _ in range(3)]
 class SerialController:
     def __init__(self, serial_port, baud):
         try:
-            self.serial = serial.Serial(serial_port, baud, timeout=1)
+            self.serial = serial.Serial(serial_port, baud)
             print(f"Connected to {serial_port}!")
         except serial.SerialException as e:
             print(f"Failed to open {serial_port}: {e}")
             self.serial = None
+
+    def read(self, amount):
+        if self.serial is None:
+            return ""
+        return self.serial.read(amount)
+
+    def wait_for_movement(self):
+        while True:
+            self.write("Q \r")
+            byte = self.read(1)
+            if byte == '.':
+                break
+
 
     def write(self, string):
         if self.serial is None:
@@ -424,6 +437,7 @@ class UserInterface:
     def send_positions(self, event=None):
         self.update_values()
         self.serial.write_positions(current_positions)
+        self.serial.wait_for_movement()
 
     def run_function(self, event=None):
         text = self.entry.get()
