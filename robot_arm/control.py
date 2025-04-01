@@ -3,10 +3,12 @@ import tkinter as tk
 from PIL import Image, ImageTk
 import random
 
+
 def uppercase_char_in_string(s, index):
     if index < 0 or index >= len(s):
         raise ValueError("Index out of range")
     return s[:index] + s[index].upper() + s[index + 1:]
+
 
 fields = {
     "base": "#0 P",
@@ -38,15 +40,57 @@ home_positions = {
 current_positions = home_positions.copy()
 
 open_grip = 1000
-close_grip = 1000
+close_grip = 1400
 
 static_positions = {
-    "square": home_positions,
-    "depot": home_positions,
-    "c0": home_positions,
-    "c1": home_positions,
-    "c2": home_positions,
-    "c3": home_positions,
+    "square": {
+        "base": 1600,
+        "shoulder": 1550,
+        "elbow": 1350,
+        "wrist": 1300,
+        "rotate": 1400,
+        "grip": 1000,
+    },
+    "depot": {
+        "base": 1150,
+        "shoulder": 1550,
+        "elbow": 1350,
+        "wrist": 1300,
+        "rotate": 1400,
+        "grip": 1000,
+    },
+    "c0": {
+        "base": 1190,
+        "shoulder": 1400,
+        "elbow": 1500,
+        "wrist": 650,
+        "rotate": 1400,
+        "grip": 1000,
+    },
+    "c1": {
+        "base": 1180,
+        "shoulder": 1300,
+        "elbow": 1370,
+        "wrist": 650,
+        "rotate": 1400,
+        "grip": 1000,
+    },
+    "c2": {
+        "base": 1200,
+        "shoulder": 1250,
+        "elbow": 1320,
+        "wrist": 800,
+        "rotate": 1400,
+        "grip": 1000,
+    },
+    "c3": {
+        "base": 1200,
+        "shoulder": 1160,
+        "elbow": 1170,
+        "wrist": 830,
+        "rotate": 1400,
+        "grip": 1000,
+    },
     "x1": home_positions,
     "x2": home_positions,
     "x3": home_positions,
@@ -55,23 +99,88 @@ static_positions = {
     "o2": home_positions,
     "o3": home_positions,
     "o4": home_positions,
-    "s0_0": home_positions,
-    "s0_1": home_positions,
-    "s0_2": home_positions,
-    "s1_0": home_positions,
-    "s1_1": home_positions,
-    "s1_2": home_positions,
-    "s2_0": home_positions,
-    "s2_1": home_positions,
-    "s2_2": home_positions,
+    "s0_0": {
+        "base": 1850,
+        "shoulder": 1400,
+        "elbow": 1480,
+        "wrist": 690,
+        "rotate": 1400,
+        "grip": 1400,
+    },
+    "s0_1": {
+        "base": 1600,
+        "shoulder": 1460,
+        "elbow": 1570,
+        "wrist": 660,
+        "rotate": 1400,
+        "grip": 1000,
+    },
+    "s0_2": {
+        "base": 1380,
+        "shoulder": 1450,  # may need to increase by 10-30
+        "elbow": 1570,
+        "wrist": 660,
+        "rotate": 1400,
+        "grip": 1000,
+    },
+    "s1_0": {
+        "base": 1750,
+        "shoulder": 1220,
+        "elbow": 1230,
+        "wrist": 690,
+        "rotate": 690,
+        "grip": 1000,
+    },
+    "s1_1": {
+        "base": 1620,
+        "shoulder": 1220,
+        "elbow": 1240,
+        "wrist": 660,
+        "rotate": 1400,
+        "grip": 1000,
+    },
+    "s1_2": {
+        "base": 1450,
+        "shoulder": 1220,
+        "elbow": 1240,
+        "wrist": 660,
+        "rotate": 1400,
+        "grip": 1400,
+    },
+    "s2_0": {
+        "base": 1700,
+        "shoulder": 1030,
+        "elbow": 940,
+        "wrist": 760,
+        "rotate": 1400,
+        "grip": 1400,
+    },
+    "s2_1": {
+        "base": 1580,
+        "shoulder": 1040,
+        "elbow": 940,
+        "wrist": 760,
+        "rotate": 1400,
+        "grip": 1000,
+    },
+    "s2_2": {
+        "base": 1460,
+        "shoulder": 1100,
+        "elbow": 1060,
+        "wrist": 760,
+        "rotate": 1400,
+        "grip": 1000,
+    },
 }
 
 board_state = [["" for _ in range(3)] for _ in range(3)]
 
+
 class SerialController:
-    def __init__(self, serial_port):
+    def __init__(self, serial_port, baud):
         try:
-            self.serial = serial.Serial(serial_port, 115200, timeout=1)
+            self.serial = serial.Serial(serial_port, baud, timeout=1)
+            print(f"Connected to {serial_port}!")
         except serial.SerialException as e:
             print(f"Failed to open {serial_port}: {e}")
             self.serial = None
@@ -93,10 +202,10 @@ class SerialController:
 
 
 class UserInterface:
-    def __init__(self, serial_port, increment_amount = 10):
+    def __init__(self, serial_port, baud, increment_amount=10):
         self.current_joint_index = 0
         self.increment_amount = increment_amount
-        self.serial = SerialController(serial_port)
+        self.serial = SerialController(serial_port, baud)
         self.root = tk.Tk()
         self.root.title("Robot Arm Controller")
 
@@ -139,8 +248,10 @@ class UserInterface:
         self.cell_size = (tick_width - self.offset) / 3
         cell_size = self.cell_size
         for i in range(1, 3):
-            self.tic_tac_toe_canvas.create_line(i * cell_size, self.offset, i * cell_size, tick_height - self.offset, width=2)
-            self.tic_tac_toe_canvas.create_line(self.offset, i * cell_size, tick_width - self.offset, i * cell_size, width=2)
+            self.tic_tac_toe_canvas.create_line(i * cell_size, self.offset, i * cell_size, tick_height - self.offset,
+                                                width=2)
+            self.tic_tac_toe_canvas.create_line(self.offset, i * cell_size, tick_width - self.offset, i * cell_size,
+                                                width=2)
 
         self.control_frame = tk.Frame(self.root, padx=200, pady=150)
         self.control_frame.grid(row=1, column=1, sticky="se")
@@ -148,7 +259,8 @@ class UserInterface:
         self.selected_joint_label = tk.Label(self.control_frame, text="Selected Joint: Base", font=("Arial", 12))
         self.selected_joint_label.pack()
 
-        self.joint_value_label = tk.Label(self.control_frame, text=current_positions[self.selected_joint], font=("Arial", 14, "bold"))
+        self.joint_value_label = tk.Label(self.control_frame, text=current_positions[self.selected_joint],
+                                          font=("Arial", 14, "bold"))
         self.joint_value_label.pack()
 
         self.btn_decrease = tk.Button(self.control_frame, text="−", font=("Arial", 14), command=self.decrease_value)
@@ -160,11 +272,28 @@ class UserInterface:
         self.btn_update = tk.Button(self.control_frame, text="Update", font=("Arial", 14), command=self.send_positions)
         self.btn_update.pack(pady=10)
 
+        self.input_frame = tk.Frame(self.root)
+        self.input_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+
+        self.label = tk.Label(self.input_frame, text="Enter command:")
+        self.label.grid(row=0, column=0, padx=5, pady=5)
+
+        self.entry = tk.Entry(self.input_frame)
+        self.entry.grid(row=1, column=0, padx=5, pady=5)
+
+        self.run_button = tk.Button(self.input_frame, text="Execute", command=self.run_function)
+        self.run_button.grid(row=2, column=0, padx=5, pady=5)
+
         self.root.bind("<w>", self.increase_value)
         self.root.bind("<s>", self.decrease_value)
         self.root.bind("<a>", self.previous_joint)
         self.root.bind("<d>", self.next_joint)
         self.root.bind("<p>", self.print_positions)
+        self.root.bind("<h>", self.return_home)
+        self.root.bind("<c>", self.close_grip)
+        self.root.bind("<o>", self.open_grip)
+        self.root.bind("<j>", self.square)
+        self.root.bind("<k>", self.depot)
         self.root.bind("<Return>", self.send_positions)
 
         self.root.mainloop()
@@ -197,7 +326,6 @@ class UserInterface:
     def on_tic_tac_toe_click(self, event):
         row, col = (self.offset + event.y) // self.cell_size, (self.offset + event.x) // self.cell_size
 
-
     def increase_value(self, event=None):
         current_positions[self.selected_joint] = current_positions[self.selected_joint] + self.increment_amount
         self.update_values()
@@ -227,67 +355,93 @@ class UserInterface:
     def print_positions(self, event=None):
         print("{")
         for key, value in current_positions.items():
-            print(f"\t\"{key}\": {value}")
+            print(f"\t\"{key}\": {value},")
         print("}")
         print()
 
+    def return_home(self, event=None):
+        print("Returning home!")
+        current_positions = home_positions.copy()
+        self.send_positions()
+
     def open_grip(self, event=None):
+        print("Opening grip!")
         current_positions["grip"] = open_grip
         self.send_positions()
 
     def close_grip(self, event=None):
+        print("Closing grip!")
         current_positions["grip"] = close_grip
         self.send_positions()
 
     def home(self, event=None):
         global current_positions
+        grip = current_positions["grip"]
         current_positions = home_positions.copy()
+        current_positions["grip"] = grip
         self.send_positions()
 
     def square(self, event=None):
         global current_positions
-        current_positions = static_positions["square"]
+        grip = current_positions["grip"]
+        current_positions = static_positions["square"].copy()
+        current_positions["grip"] = grip
         self.send_positions()
 
     def depot(self, event=None):
         global current_positions
-        current_positions = static_positions["depot"]
+        grip = current_positions["grip"]
+        current_positions = static_positions["depot"].copy()
+        current_positions["grip"] = grip
         self.send_positions()
 
     def piece_to_square(self, piece, square_x, square_y):
         self.depot()
         global current_positions
-        current_positions = static_positions[f"c{piece}"]
+        current_positions = static_positions[f"c{piece}"].copy()
         self.send_positions()
         self.close_grip()
         self.depot()
         self.square()
-        current_positions = static_positions[f"s{square_x}_{square_y}"]
+        current_positions = static_positions[f"s{square_x}_{square_y}"].copy()
         self.send_positions()
         self.open_grip()
         self.square()
-        self.home()
 
     def square_to_piece(self, piece, square_x, square_y):
         self.square()
         global current_positions
-        current_positions = static_positions[f"s{square_x}_{square_y}"]
+        current_positions = static_positions[f"s{square_x}_{square_y}"].copy()
         self.send_positions()
         self.close_grip()
         self.square()
         self.depot()
-        current_positions = static_positions[f"c{piece}"]
+        current_positions = static_positions[f"c{piece}"].copy()
         self.send_positions()
         self.open_grip()
         self.depot()
-        self.home()
 
     def send_positions(self, event=None):
         self.update_values()
         self.serial.write_positions(current_positions)
 
+    def run_function(self, event=None):
+        text = self.entry.get()
+        print(f"Running command {text}")
+        parts = text.split(" ")
+        print(parts)
+        try:
+            if parts[0].startswith("c"):
+                self.piece_to_square(parts[1], parts[2], parts[3])
+            else:
+                self.square_to_piece(parts[1], parts[2], parts[3])
+        except:
+            print("Invalid command!")
+
+
 def main():
-    interface = UserInterface("COM1")
+    interface = UserInterface("COM1", 115200)
+
 
 if __name__ == "__main__":
     main()
