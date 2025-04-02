@@ -39,6 +39,8 @@ home_positions = {
 
 current_positions = home_positions.copy()
 
+current_cube = 0
+
 open_grip = 1000
 close_grip = 1400
 
@@ -61,33 +63,33 @@ static_positions = {
     },
     "c0": {
         "base": 1190,
-        "shoulder": 1400,
-        "elbow": 1500,
+        "shoulder": 1380,
+        "elbow": 1460,
         "wrist": 650,
         "rotate": 1400,
         "grip": 1000,
     },
     "c1": {
-        "base": 1180,
-        "shoulder": 1300,
-        "elbow": 1370,
-        "wrist": 650,
+        "base": 1100,
+        "shoulder": 1280,
+        "elbow": 1320,
+        "wrist": 620,
         "rotate": 1400,
         "grip": 1000,
     },
     "c2": {
-        "base": 1200,
-        "shoulder": 1250,
-        "elbow": 1320,
-        "wrist": 800,
+        "base": 1040,
+        "shoulder": 1160,
+        "elbow": 1090,
+        "wrist": 650,
         "rotate": 1400,
         "grip": 1000,
     },
     "c3": {
         "base": 1200,
-        "shoulder": 1160,
-        "elbow": 1170,
-        "wrist": 830,
+        "shoulder": 1070,
+        "elbow": 950,
+        "wrist": 660,
         "rotate": 1400,
         "grip": 1000,
     },
@@ -171,6 +173,14 @@ static_positions = {
         "rotate": 1400,
         "grip": 1000,
     },
+    "accept": {
+        "base": 1500,
+        "shoulder": 1350,
+        "elbow": 1100,
+        "wrist": 1300,
+        "rotate": 1400,
+        "grip": 1000,
+    },
 }
 
 board_state = [["" for _ in range(3)] for _ in range(3)]
@@ -194,9 +204,8 @@ class SerialController:
         while True:
             self.write("Q \r")
             byte = self.read(1)
-            if byte == '.':
+            if byte == b'.':
                 break
-
 
     def write(self, string):
         if self.serial is None:
@@ -309,7 +318,14 @@ class UserInterface:
         self.root.bind("<k>", self.depot)
         self.root.bind("<Return>", self.send_positions)
 
+        self.root.bind("<Button-1>", self.on_click)
+
         self.root.mainloop()
+
+    def on_click(self, event):
+        widget = event.widget
+        if widget != self.entry:
+            self.root.focus_set()
 
     def mouse_motion_event(self, event):
         min_dist = 35  # Distance threshold for highlighting
@@ -340,24 +356,34 @@ class UserInterface:
         row, col = (self.offset + event.y) // self.cell_size, (self.offset + event.x) // self.cell_size
 
     def increase_value(self, event=None):
+        if self.entry.focus_get() == self.entry:
+            return
         current_positions[self.selected_joint] = current_positions[self.selected_joint] + self.increment_amount
         self.update_values()
 
     def decrease_value(self, event=None):
+        if self.entry.focus_get() == self.entry:
+            return
         current_positions[self.selected_joint] = current_positions[self.selected_joint] - self.increment_amount
         self.update_values()
 
     def next_joint(self, event=None):
+        if self.entry.focus_get() == self.entry:
+            return
         self.current_joint_index = (self.current_joint_index - 1) % len(fields)
         self.selected_joint = list(current_positions.keys())[self.current_joint_index]
         self.update_values()
 
     def previous_joint(self, event=None):
+        if self.entry.focus_get() == self.entry:
+            return
         self.current_joint_index = (self.current_joint_index + 1) % len(fields)
         self.selected_joint = list(current_positions.keys())[self.current_joint_index]
         self.update_values()
 
     def update_values(self):
+        if self.entry.focus_get() == self.entry:
+            return
         label = self.selected_joint
         label = uppercase_char_in_string(label, 0)
         self.selected_joint_label.config(text=f"Selected Joint: {label}")
@@ -366,6 +392,8 @@ class UserInterface:
         self.canvas.coords(self.selection, x - 15, y - 15, x + 15, y + 15)
 
     def print_positions(self, event=None):
+        if self.entry.focus_get() == self.entry:
+            return
         print("{")
         for key, value in current_positions.items():
             print(f"\t\"{key}\": {value},")
@@ -373,68 +401,89 @@ class UserInterface:
         print()
 
     def return_home(self, event=None):
-        print("Returning home!")
-        current_positions = home_positions.copy()
-        self.send_positions()
+        if self.entry.focus_get() == self.entry:
+            return
+        self.set_to(home_positions)
 
     def open_grip(self, event=None):
+        if self.entry.focus_get() == self.entry:
+            return
         print("Opening grip!")
         current_positions["grip"] = open_grip
         self.send_positions()
 
     def close_grip(self, event=None):
+        if self.entry.focus_get() == self.entry:
+            return
         print("Closing grip!")
         current_positions["grip"] = close_grip
         self.send_positions()
 
-    def home(self, event=None):
+    def set_to(self, positions):
+        if self.entry.focus_get() == self.entry:
+            return
         global current_positions
+
         grip = current_positions["grip"]
-        current_positions = home_positions.copy()
+        current_positions = positions.copy()
         current_positions["grip"] = grip
+
+        copy_positions = current_positions.copy()
+        current_positions["shoulder"] = static_positions["depot"]["shoulder"]
+        current_positions["elbow"] = static_positions["depot"]["elbow"]
+        current_positions["wrist"] = static_positions["depot"]["wrist"]
+        self.update_values()
+        self.serial.write_positions(current_positions)
+        self.serial.wait_for_movement()
+        current_positions["wrist"] = copy_positions["wrist"]
+        self.update_values()
+        self.serial.write_positions(current_positions)
+        self.serial.wait_for_movement()
+        current_positions = copy_positions
+
+        self.update_values()
         self.send_positions()
+
+    def home(self, event=None):
+        self.set_to(home_positions)
 
     def square(self, event=None):
-        global current_positions
-        grip = current_positions["grip"]
-        current_positions = static_positions["square"].copy()
-        current_positions["grip"] = grip
-        self.send_positions()
+        self.set_to(static_positions["square"])
 
     def depot(self, event=None):
-        global current_positions
-        grip = current_positions["grip"]
-        current_positions = static_positions["depot"].copy()
-        current_positions["grip"] = grip
-        self.send_positions()
+        self.set_to(static_positions["depot"])
+
+    def accept_piece(self, event=None):
+        self.set_to(static_positions["accept"])
+        self.open_grip()
 
     def piece_to_square(self, piece, square_x, square_y):
+        if self.entry.focus_get() == self.entry:
+            return
         self.depot()
-        global current_positions
-        current_positions = static_positions[f"c{piece}"].copy()
-        self.send_positions()
+        self.set_to(static_positions[f"c{piece}"])
         self.close_grip()
         self.depot()
         self.square()
-        current_positions = static_positions[f"s{square_x}_{square_y}"].copy()
-        self.send_positions()
+        self.set_to(static_positions[f"s{square_x}_{square_y}"])
         self.open_grip()
         self.square()
 
     def square_to_piece(self, piece, square_x, square_y):
+        if self.entry.focus_get() == self.entry:
+            return
         self.square()
-        global current_positions
-        current_positions = static_positions[f"s{square_x}_{square_y}"].copy()
-        self.send_positions()
+        self.set_to(static_positions[f"s{square_x}_{square_y}"])
         self.close_grip()
         self.square()
         self.depot()
-        current_positions = static_positions[f"c{piece}"].copy()
-        self.send_positions()
+        self.set_to(static_positions[f"c{piece}"])
         self.open_grip()
         self.depot()
 
     def send_positions(self, event=None):
+        if self.entry.focus_get() == self.entry:
+            return
         self.update_values()
         self.serial.write_positions(current_positions)
         self.serial.wait_for_movement()
@@ -444,13 +493,14 @@ class UserInterface:
         print(f"Running command {text}")
         parts = text.split(" ")
         print(parts)
-        try:
-            if parts[0].startswith("c"):
-                self.piece_to_square(parts[1], parts[2], parts[3])
-            else:
-                self.square_to_piece(parts[1], parts[2], parts[3])
-        except:
-            print("Invalid command!")
+        if parts[0] == "c":
+            self.piece_to_square(parts[1], parts[2], parts[3])
+        elif parts[0] == "s":
+            self.square_to_piece(parts[1], parts[2], parts[3])
+        elif parts[0] == "g":
+            self.set_to(static_positions[parts[1]])
+        elif parts[0] == "accept":
+            self.accept_piece()
 
 
 def main():

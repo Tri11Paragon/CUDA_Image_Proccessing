@@ -216,7 +216,7 @@ def main():
     model = ff.load_model(args.model)
     model.eval()
 
-    prep()
+    # prep()
     camera.open_camera("local", lambda image, w, h: handle_image(image, model))
 
 

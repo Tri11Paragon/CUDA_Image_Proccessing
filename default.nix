@@ -17,7 +17,7 @@ pkgs.mkShell
 	];
 
 	packages = [
-	    (customPkgs.python3.withPackages (pip: [
+	    (pkgs.python3.withPackages (pip: [
 	    	pip.pandas
 	    	pip.requests
 			pip.numpy
