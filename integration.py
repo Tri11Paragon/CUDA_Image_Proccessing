@@ -157,7 +157,7 @@ def handle_image(image, model):
 
     contour_data = []
     bounded_images = []
-    for best_shape, bound, c, corners in classification_data:
+    for best_color, best_shape, bound, c, corners in classification_data:
         x, y, w, h = bound
         contour_features, con_len = ff.preprocess_contour(c)
         contour_data.append(contour_features)
@@ -177,7 +177,7 @@ def handle_image(image, model):
             predicted_color = torch.argmax(color_pred, dim=1)
 
             for class_data, color, classification in zip(classification_data, predicted_color, predicted_classes):
-                best_shape, bound, c, corners = class_data
+                best_color, best_shape, bound, c, corners = class_data
                 x, y, w, h = bound
                 cv2.rectangle(draw, (x, y), (x + w, y + h), (0, 255, 0), 2)
                 cv2.putText(draw, "Best Shape: " + best_shape, (x - 2, y - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
@@ -189,6 +189,9 @@ def handle_image(image, model):
                 cv2.putText(draw, "Predicted Shape (NN): " + ff.get_string_from_class(classification), (x - 2, y - 8),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.5, (0, 0, 255),
+                            1, cv2.LINE_AA)
+                cv2.putText(draw, "Best Color: " + best_color, (x - 2, y + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                            (0, 0, 255),
                             1, cv2.LINE_AA)
                 key = cv2.waitKey(1)
                 if key == ord('r'):
