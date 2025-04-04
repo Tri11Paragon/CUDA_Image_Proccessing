@@ -201,8 +201,6 @@ class SerialController:
         return self.serial.read(amount)
 
     def wait_for_movement(self):
-        if self.serial is None:
-            return
         while True:
             self.write("Q \r")
             byte = self.read(1)
@@ -230,11 +228,6 @@ class UserInterface:
         self.current_joint_index = 0
         self.row = -1
         self.col = -1
-        self.current_cube = 0
-        self.game_running = False
-        self.game_setup = False
-        self.player_turn = False
-        self.taken_spaces = {}
         self.increment_amount = increment_amount
         self.serial = SerialController(serial_port, baud)
         self.root = tk.Tk()
@@ -273,7 +266,6 @@ class UserInterface:
         tick_height = 600
         self.tic_tac_toe_canvas = tk.Canvas(self.top_right_frame, width=tick_width, height=tick_height, bg="white")
         self.tic_tac_toe_canvas.pack()
-        self.tic_tac_toe_canvas.bind("<Button-1>", self.on_tic_tac_toe_click)
 
         # Draw grid lines
         self.offset = 25
@@ -325,15 +317,6 @@ class UserInterface:
         self.accept_piece_button = tk.Button(self.input_frame, text="Accept Piece", command=self.accept_piece)
         self.accept_piece_button.grid(row=4, column=0, padx=5, pady=5)
 
-        self.start_game_button = tk.Button(self.input_frame, text="Start Game", command=self.setup_start_game)
-        self.start_game_button.grid(row=5, column=0, padx=5, pady=5)
-
-        self.take_cube_button = tk.Button(self.input_frame, text="Take Cube", command=self.take_cube)
-        self.take_cube_button.grid(row=5, column=1, padx=5, pady=5)
-
-        self.message_label = tk.Label(self.input_frame, text="")
-        self.message_label.grid(row=6, column=0, padx=5, pady=5)
-
         self.root.bind("<w>", self.increase_value)
         self.root.bind("<s>", self.decrease_value)
         self.root.bind("<a>", self.previous_joint)
@@ -349,61 +332,6 @@ class UserInterface:
         self.root.bind("<Button-1>", self.on_click)
 
         self.root.mainloop()
-
-    def setup_start_game(self, event=None):
-        self.game_running = True
-        self.current_cube = 0
-        self.player_turn = random.choice([True, False])
-        self.taken_spaces = {}
-        self.play_game()
-
-    def play_game(self, event=None):
-        if self.current_cube <= 3 and not self.game_setup:
-            self.message_label.config(text="Please provide the next cube!")
-            self.accept_piece()
-            return
-        if self.current_cube < 0:
-            self.message_label.config(text="Game Over! No more cubes left!")
-            self.current_cube = 0
-            self.game_running = False
-            self.cleanup()
-            return
-        if self.player_turn:
-            self.message_label.config(text="It's your turn!")
-            return
-        self.message_label.config(text="It's robot's turn!")
-        while True:
-            p1 = random.randint(0, 2)
-            p2 = random.randint(0, 2)
-            position = f"s{p1}_{p2}"
-            if not position in self.taken_spaces:
-                break
-        self.piece_to_square(self.current_cube, p1, p2)
-        self.current_cube -= 1
-        self.draw_o(p1, p2)
-        self.player_turn = True
-        self.play_game()
-
-    def cleanup(self, event=None):
-        for square in self.taken_spaces:
-            self.square_to_piece_ul(self.current_cube, square)
-            self.current_cube += 1
-
-    def take_cube(self, event=None):
-        if self.current_cube > 3:
-            self.message_label.config(text="No more cubes positions left!")
-            return
-        self.close_grip()
-        self.message_label.config(text=f"Moving cube to position {self.current_cube}")
-        self.set_to(static_positions[f"c{self.current_cube}"])
-        self.current_cube += 1
-        if self.current_cube == 4:
-            self.game_setup = True
-            self.current_cube = 3
-            self.message_label.config(text="Cubes are in position!")
-        self.open_grip()
-        if self.game_running:
-            self.play_game()
 
     def on_click(self, event):
         widget = event.widget
@@ -441,37 +369,10 @@ class UserInterface:
             coords = self.canvas.coords(self.highlight)
             self.canvas.coords(self.selection, coords[0], coords[1], coords[2], coords[3])
             self.update_values()
+        self.on_tic_tac_toe_click(event)
 
     def on_tic_tac_toe_click(self, event):
         self.row, self.col = (self.offset + event.y) // self.cell_size, (self.offset + event.x) // self.cell_size
-        if self.player_turn:
-            self.piece_to_square(self.current_cube, int(self.row), int(self.col))
-            self.draw_x(self.row, self.col)
-            self.current_cube -= 1
-            self.player_turn = False
-            self.play_game()
-        print(f"{self.row}, {self.col}")
-
-    def draw_x(self, row, col):
-        # Calculate the pixel coordinates for the top-left and bottom-right of the cell
-        x1 = self.offset + col * self.cell_size
-        y1 = self.offset + row * self.cell_size
-        x2 = x1 + self.cell_size
-        y2 = y1 + self.cell_size
-
-        # Draw two diagonal lines for an X
-        self.tic_tac_toe_canvas.create_line(x1, y1, x2, y2, width=3, fill="red")
-        self.tic_tac_toe_canvas.create_line(x1, y2, x2, y1, width=3, fill="red")
-
-    def draw_o(self, row, col):
-        # Calculate the pixel coordinates for the cell
-        x1 = self.offset + col * self.cell_size
-        y1 = self.offset + row * self.cell_size
-        x2 = x1 + self.cell_size
-        y2 = y1 + self.cell_size
-
-        # Draw an oval for an O
-        self.tic_tac_toe_canvas.create_oval(x1, y1, x2, y2, width=3, outline="blue")
 
     def increase_value(self, event=None):
         if self.entry.focus_get() == self.entry:
@@ -599,20 +500,17 @@ class UserInterface:
         self.open_grip()
         # self.square()
 
-    def square_to_piece_ul(self, piece, position):
+    def square_to_piece(self, piece, square_x, square_y):
         if self.entry.focus_get() == self.entry:
             return
         # self.square()
-        self.set_to(static_positions[position])
+        self.set_to(static_positions[f"s{square_x}_{square_y}"])
         self.close_grip()
         # self.square()
         # self.depot()
         self.set_to(static_positions[f"c{piece}"])
         self.open_grip()
         # self.depot()
-
-    def square_to_piece(self, piece, square_x, square_y):
-        self.square_to_piece_ul(piece, f"s{square_x}_{square_y}")
 
     def send_positions(self, event=None):
         if self.entry.focus_get() == self.entry:
