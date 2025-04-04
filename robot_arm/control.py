@@ -29,12 +29,12 @@ joint_positions = {
 }
 
 home_positions = {
-    "base": 1500,
-    "shoulder": 2150,
-    "elbow": 2150,
+    "base": 1600,
+    "shoulder": 1550,
+    "elbow": 1350,
     "wrist": 1300,
     "rotate": 1400,
-    "grip": 1000
+    "grip": 1000,
 }
 
 current_positions = home_positions.copy()
@@ -110,7 +110,7 @@ static_positions = {
         "grip": 1400,
     },
     "s0_1": {
-        "base": 1600,
+        "base": 1650,
         "shoulder": 1460,
         "elbow": 1570,
         "wrist": 660,
@@ -127,11 +127,11 @@ static_positions = {
     },
     "s1_0": {
         "base": 1750,
-        "shoulder": 1220,
-        "elbow": 1230,
+        "shoulder": 1190,
+        "elbow": 1180,
         "wrist": 690,
-        "rotate": 690,
-        "grip": 1000,
+        "rotate": 1400,
+        "grip": 1400,
     },
     "s1_1": {
         "base": 1620,
@@ -142,7 +142,7 @@ static_positions = {
         "grip": 1000,
     },
     "s1_2": {
-        "base": 1450,
+        "base": 1400,
         "shoulder": 1220,
         "elbow": 1240,
         "wrist": 660,
@@ -150,9 +150,9 @@ static_positions = {
         "grip": 1400,
     },
     "s2_0": {
-        "base": 1700,
-        "shoulder": 1030,
-        "elbow": 940,
+        "base": 1720,
+        "shoulder": 1035,
+        "elbow": 920,
         "wrist": 760,
         "rotate": 1400,
         "grip": 1400,
@@ -306,6 +306,15 @@ class UserInterface:
         self.run_button = tk.Button(self.input_frame, text="Execute", command=self.run_function)
         self.run_button.grid(row=2, column=0, padx=5, pady=5)
 
+        self.open_grip_button = tk.Button(self.input_frame, text="Open Grip", command=self.open_grip)
+        self.open_grip_button.grid(row=3, column=0, padx=5, pady=5)
+
+        self.close_grip_button = tk.Button(self.input_frame, text="Close Grip", command=self.close_grip)
+        self.close_grip_button.grid(row=3, column=1, padx=5, pady=5)
+
+        self.accept_piece_button = tk.Button(self.input_frame, text="Accept Piece", command=self.accept_piece)
+        self.accept_piece_button.grid(row=4, column=0, padx=5, pady=5)
+
         self.root.bind("<w>", self.increase_value)
         self.root.bind("<s>", self.decrease_value)
         self.root.bind("<a>", self.previous_joint)
@@ -316,7 +325,7 @@ class UserInterface:
         self.root.bind("<o>", self.open_grip)
         self.root.bind("<j>", self.square)
         self.root.bind("<k>", self.depot)
-        self.root.bind("<Return>", self.send_positions)
+        self.root.bind("<Return>", self.button_return)
 
         self.root.bind("<Button-1>", self.on_click)
 
@@ -326,6 +335,13 @@ class UserInterface:
         widget = event.widget
         if widget != self.entry:
             self.root.focus_set()
+
+    def button_return(self, event=None):
+        if self.entry.focus_get() == self.entry:
+            self.root.focus_set()
+            self.run_function()
+            return
+        self.send_positions()
 
     def mouse_motion_event(self, event):
         min_dist = 35  # Distance threshold for highlighting
@@ -424,24 +440,36 @@ class UserInterface:
             return
         global current_positions
 
-        grip = current_positions["grip"]
-        current_positions = positions.copy()
-        current_positions["grip"] = grip
+        # grip = current_positions["grip"]
+        # current_positions =
+        # current_positions["grip"] = grip
 
-        copy_positions = current_positions.copy()
-        current_positions["shoulder"] = static_positions["depot"]["shoulder"]
+        copy_positions = positions.copy()
+        copy_positions["grip"] = current_positions["grip"]
+        # if not (current_positions["elbow"] == static_positions["depot"]["elbow"]):
         current_positions["elbow"] = static_positions["depot"]["elbow"]
+        # self.send_positions()
+        # if not (current_positions["shoulder"] == static_positions["depot"]["shoulder"]):
+        current_positions["shoulder"] = static_positions["depot"]["shoulder"]
+        # self.send_positions()
+        # if not (current_positions["wrist"] == static_positions["depot"]["wrist"]):
         current_positions["wrist"] = static_positions["depot"]["wrist"]
-        self.update_values()
-        self.serial.write_positions(current_positions)
-        self.serial.wait_for_movement()
-        current_positions["wrist"] = copy_positions["wrist"]
-        self.update_values()
+        self.send_positions()
+
+        current_positions["base"] = 800
+        self.send_positions()
+
+        current_positions["base"] = copy_positions["base"]
+        self.send_positions()
+
+        if not (current_positions["wrist"] == copy_positions["wrist"]):
+            current_positions["wrist"] = copy_positions["wrist"]
+            self.send_positions()
+
         self.serial.write_positions(current_positions)
         self.serial.wait_for_movement()
         current_positions = copy_positions
 
-        self.update_values()
         self.send_positions()
 
     def home(self, event=None):
@@ -460,26 +488,26 @@ class UserInterface:
     def piece_to_square(self, piece, square_x, square_y):
         if self.entry.focus_get() == self.entry:
             return
-        self.depot()
+        # self.depot()
         self.set_to(static_positions[f"c{piece}"])
         self.close_grip()
-        self.depot()
-        self.square()
+        # self.depot()
+        # self.square()
         self.set_to(static_positions[f"s{square_x}_{square_y}"])
         self.open_grip()
-        self.square()
+        # self.square()
 
     def square_to_piece(self, piece, square_x, square_y):
         if self.entry.focus_get() == self.entry:
             return
-        self.square()
+        # self.square()
         self.set_to(static_positions[f"s{square_x}_{square_y}"])
         self.close_grip()
-        self.square()
-        self.depot()
+        # self.square()
+        # self.depot()
         self.set_to(static_positions[f"c{piece}"])
         self.open_grip()
-        self.depot()
+        # self.depot()
 
     def send_positions(self, event=None):
         if self.entry.focus_get() == self.entry:
