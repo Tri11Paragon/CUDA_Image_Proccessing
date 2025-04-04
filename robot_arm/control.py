@@ -226,6 +226,8 @@ class SerialController:
 class UserInterface:
     def __init__(self, serial_port, baud, increment_amount=10):
         self.current_joint_index = 0
+        self.row = -1
+        self.col = -1
         self.increment_amount = increment_amount
         self.serial = SerialController(serial_port, baud)
         self.root = tk.Tk()
@@ -367,9 +369,10 @@ class UserInterface:
             coords = self.canvas.coords(self.highlight)
             self.canvas.coords(self.selection, coords[0], coords[1], coords[2], coords[3])
             self.update_values()
+        self.on_tic_tac_toe_click(event)
 
     def on_tic_tac_toe_click(self, event):
-        row, col = (self.offset + event.y) // self.cell_size, (self.offset + event.x) // self.cell_size
+        self.row, self.col = (self.offset + event.y) // self.cell_size, (self.offset + event.x) // self.cell_size
 
     def increase_value(self, event=None):
         if self.entry.focus_get() == self.entry:
