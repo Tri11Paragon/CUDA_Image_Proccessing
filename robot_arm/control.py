@@ -234,7 +234,8 @@ class UserInterface:
         self.game_running = False
         self.game_setup = False
         self.player_turn = False
-        self.taken_spaces = {}
+        self.taken_spaces = []
+        self.player_spaces = []
         self.increment_amount = increment_amount
         self.serial = SerialController(serial_port, baud)
         self.root = tk.Tk()
@@ -331,6 +332,9 @@ class UserInterface:
         self.take_cube_button = tk.Button(self.input_frame, text="Take Cube", command=self.take_cube)
         self.take_cube_button.grid(row=5, column=1, padx=5, pady=5)
 
+        self.cleanup_cubes_button = tk.Button(self.input_frame, text="Cleanup", command=self.cleanup)
+        self.cleanup_cubes_button.grid(row=5, column=2, padx=5, pady=5)
+
         self.message_label = tk.Label(self.input_frame, text="")
         self.message_label.grid(row=6, column=0, padx=5, pady=5)
 
@@ -352,10 +356,14 @@ class UserInterface:
         self.root.mainloop()
 
     def setup_start_game(self, event=None):
+        if self.game_setup:
+            cleanup()
+        self.game_setup = False
         self.game_running = True
         self.current_cube = 0
         self.player_turn = random.choice([True, False])
-        self.taken_spaces = {}
+        self.taken_spaces = []
+        self.player_spaces = []
         self.play_game()
 
     def play_game(self, event=None):
@@ -367,7 +375,6 @@ class UserInterface:
             self.message_label.config(text="Game Over! No more cubes left!")
             self.current_cube = 0
             self.game_running = False
-            self.cleanup()
             return
         if self.player_turn:
             self.message_label.config(text="It's your turn!")
@@ -380,6 +387,7 @@ class UserInterface:
             if not position in self.taken_spaces:
                 break
         self.piece_to_square(self.current_cube, p1, p2)
+        self.taken_spaces.append(position)
         self.current_cube -= 1
         self.draw_o(p1, p2)
         self.player_turn = True
@@ -387,6 +395,8 @@ class UserInterface:
 
     def cleanup(self, event=None):
         for square in self.taken_spaces:
+            if square in self.player_spaces:
+                continue
             self.square_to_piece_ul(self.current_cube, square)
             self.current_cube += 1
 
@@ -446,9 +456,11 @@ class UserInterface:
     def on_tic_tac_toe_click(self, event):
         self.row, self.col = (self.offset + event.y) // self.cell_size, (self.offset + event.x) // self.cell_size
         if self.player_turn:
-            self.piece_to_square(self.current_cube, int(self.row), int(self.col))
+            #self.piece_to_square(self.current_cube, int(self.row), int(self.col))
             self.draw_x(self.row, self.col)
-            self.current_cube -= 1
+            self.taken_spaces.append(f"s{int(self.row)}_{int(self.col)}")
+            self.player_spaces.append(f"s{int(self.row)}_{int(self.col)}")
+            #self.current_cube -= 1
             self.player_turn = False
             self.play_game()
         print(f"{self.row}, {self.col}")
