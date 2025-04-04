@@ -344,6 +344,7 @@ class UserInterface:
         self.root.bind("<o>", self.open_grip)
         self.root.bind("<j>", self.square)
         self.root.bind("<k>", self.depot)
+        self.root.bind("<t>", self.take_cube)
         self.root.bind("<Return>", self.button_return)
 
         self.root.bind("<Button-1>", self.on_click)
